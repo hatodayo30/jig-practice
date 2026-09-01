@@ -1,1 +1,262 @@
+:root {
+  --color-accent: #6441a5;
+  --color-border: #e0e0e0;
+  --color-video-bg: #18181b;
+  --header-height: 48px;
+  --send-area-height: 108px;
+}
 
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Hiragino Kaku Gothic ProN", "Segoe UI", sans-serif;
+  color: #1a1a1a;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  height: var(--header-height);
+  padding: 0 16px;
+  border-bottom: 1px solid var(--color-border);
+  background: #fff;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.layout {
+  display: flex;
+  height: calc(100vh - var(--header-height));
+  width: 100%;
+}
+
+.area-title {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.video-area {
+  flex: 3 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+
+.video-frame {
+  flex: 0 0 auto;
+  width: 100%;
+  aspect-ratio: 8 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-video-bg);
+  color: #999;
+  font-size: 14px;
+}
+
+.stream-meta {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #fff;
+  border-top: 1px solid var(--color-border);
+}
+
+.streamer-icon {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #e0e0e0;
+}
+
+.stream-title-box {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: #666;
+  border: 1px dashed var(--color-border);
+  border-radius: 6px;
+}
+
+.viewer-count-box {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #666;
+  border: 1px dashed var(--color-border);
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.side-area {
+  flex: 0 0 340px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--color-border);
+  background: #fff;
+}
+
+.comment-area {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.comment-area .area-title {
+  color: #333;
+}
+
+.comment-list {
+  margin: 0;
+  padding: 6px 14px;
+  list-style: none;
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
+
+.comment-item {
+  padding: 6px 0;
+  font-size: 13px;
+  line-height: 1.5;
+  border-bottom: 1px solid #f2f2f2;
+}
+
+.comment-item:last-child {
+  border-bottom: none;
+}
+
+.comment-user {
+  display: inline-block;
+  margin-right: 6px;
+  font-weight: 600;
+  color: var(--color-accent);
+}
+
+.send-area {
+  flex: 0 0 var(--send-area-height);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #fafafa;
+  border-top: 1px solid var(--color-border);
+}
+
+.item-list {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.comment-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comment-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  font-size: 13px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.comment-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.send-button {
+  height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-accent);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.item-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  color: #fff;
+  background: #333;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.item-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* タブレット以下: 動画を上、コメント欄を下に積む */
+@media (max-width: 900px) {
+  .layout {
+    flex-direction: column;
+    height: auto;
+    min-height: calc(100vh - var(--header-height));
+  }
+
+  .video-area {
+    flex: 0 0 auto;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+  }
+
+  .side-area {
+    flex: 1 1 auto;
+    min-height: 320px;
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+  }
+}
+
+/* スマホ: 余白や文字サイズを詰める */
+@media (max-width: 480px) {
+  .app-header {
+    padding: 0 12px;
+  }
+
+  .area-title {
+    padding: 8px 12px;
+  }
+
+  .send-area {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+}

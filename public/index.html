@@ -8,6 +8,63 @@
     <script src="/main.js" defer></script>
   </head>
   <body>
-    <h1>視聴画面</h1>
+    <header class="app-header">
+      <h1>視聴画面</h1>
+    </header>
+    <div class="layout">
+      <section class="video-area">
+        <h2 class="area-title">動画</h2>
+        <div class="video-frame">動画表示領域</div>
+        <div class="stream-meta">
+          <div class="streamer-icon"></div>
+          <div class="stream-title-box">配信タイトル表示枠</div>
+          <div class="viewer-count-box">視聴者数表示枠</div>
+        </div>
+      </section>
+      <aside class="side-area">
+        <section class="comment-area">
+          <h2 class="area-title">コメント</h2>
+          <ul class="comment-list">
+            <li class="comment-item"><span class="comment-user">ユーザーA</span>こんにちは!</li>
+            <li class="comment-item"><span class="comment-user">ユーザーB</span>いい配信ですね</li>
+            <li class="comment-item"><span class="comment-user">ユーザーC</span>www</li>
+            <li class="comment-item"><span class="comment-user">ユーザーD</span>応援してます!</li>
+          </ul>
+        </section>
+        <section class="send-area">
+          <ul class="item-list">
+            <li>
+              <button type="button" class="item-button" aria-label="アイテム1">
+                <svg class="item-icon" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 3 L14.5 9.5 L21 10 L16 14.5 L17.5 21 L12 17.5 L6.5 21 L8 14.5 L3 10 L9.5 9.5 Z" fill="currentColor" />
+                </svg>
+              </button>
+            </li>
+            <li>
+              <button type="button" class="item-button" aria-label="アイテム2">
+                <svg class="item-icon" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 21 C12 21 4 15.5 4 9.8 C4 6.6 6.5 4.5 9.2 4.5 C10.8 4.5 11.7 5.3 12 5.8 C12.3 5.3 13.2 4.5 14.8 4.5 C17.5 4.5 20 6.6 20 9.8 C20 15.5 12 21 12 21 Z" fill="currentColor" />
+                </svg>
+              </button>
+            </li>
+            <li>
+              <button type="button" class="item-button" aria-label="アイテム3">
+                <svg class="item-icon" viewBox="0 0 24 24" fill="none">
+                  <rect x="4" y="9" width="16" height="11" rx="1" fill="currentColor" />
+                  <rect x="3" y="6" width="18" height="4" rx="1" fill="currentColor" />
+                  <rect x="11" y="6" width="2" height="14" fill="#fff" />
+                  <path d="M12 6 C10 6 8 4.5 8 3 C8 2 9 1.5 10 2 C11 2.5 12 4 12 6 Z" fill="currentColor" />
+                  <path d="M12 6 C14 6 16 4.5 16 3 C16 2 15 1.5 14 2 C13 2.5 12 4 12 6 Z" fill="currentColor" />
+                </svg>
+              </button>
+            </li>
+          </ul>
+          <div class="comment-row">
+            <input type="text" class="comment-input" placeholder="コメントを入力" />
+            <button type="button" class="send-button">送信</button>
+          </div>
+        </section>
+      </aside>
+    </div>
   </body>
 </html>
