@@ -147,3 +147,40 @@ video.addEventListener("durationchange", updateSeekBar);
 updatePlayToggle();
 updateMuteToggle();
 updateSeekBar();
+
+const COMMENT_SERVER_URL = "https://intern-comment-server.intern-comment-server.deno.net";
+const commentList = document.getElementById("comment-list");
+
+function renderCommentEntry({ text, item }) {
+  const li = document.createElement("li");
+  li.className = "comment-item";
+
+  if (item) {
+    const icon = document.createElement("img");
+    icon.className = "comment-item-icon";
+    icon.src = item.iconUrl;
+    icon.alt = item.name;
+    li.appendChild(icon);
+    li.appendChild(document.createTextNode(item.name));
+  }
+
+  if (text) {
+    if (item) li.appendChild(document.createTextNode(" "));
+    li.appendChild(document.createTextNode(text));
+  }
+
+  if (!item && !text) return;
+
+  commentList.appendChild(li);
+  commentList.scrollTop = commentList.scrollHeight;
+}
+
+const commentEvents = new EventSource(`${COMMENT_SERVER_URL}/events`);
+commentEvents.onmessage = (event) => {
+  try {
+    const payload = JSON.parse(event.data);
+    renderCommentEntry(payload);
+  } catch {
+    // 不正なデータは無視する
+  }
+};
