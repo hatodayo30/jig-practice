@@ -78,9 +78,13 @@
             </li>
           </ul>
           <div class="comment-row">
-            <input type="text" class="comment-input" placeholder="コメントを入力" />
-            <button type="button" class="send-button">送信</button>
+            <textarea id="comment-input" class="comment-input" placeholder="コメントを入力" rows="2"></textarea>
+            <button type="button" id="send-button" class="send-button">送信</button>
           </div>
+          <div class="comment-meta-row">
+            <span id="char-counter" class="char-counter">0/200</span>
+          </div>
+          <p id="comment-error" class="comment-error" role="alert" hidden></p>
         </section>
       </aside>
     </div>

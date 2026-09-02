@@ -184,3 +184,91 @@ commentEvents.onmessage = (event) => {
     // 不正なデータは無視する
   }
 };
+
+const COMMENT_MAX_LENGTH = 200;
+const commentInput = document.getElementById("comment-input");
+const sendButton = document.getElementById("send-button");
+const charCounter = document.getElementById("char-counter");
+const commentError = document.getElementById("comment-error");
+
+let isSending = false;
+
+function getCommentValidation() {
+  const value = commentInput.value;
+  const length = value.length;
+  return {
+    value,
+    length,
+    isEmpty: value.trim().length === 0,
+    isOverLimit: length > COMMENT_MAX_LENGTH,
+  };
+}
+
+function showCommentError(message) {
+  commentError.textContent = message;
+  commentError.hidden = false;
+}
+
+function hideCommentError() {
+  commentError.hidden = true;
+  commentError.textContent = "";
+}
+
+function updateSendButtonDisabled() {
+  const { isEmpty, isOverLimit } = getCommentValidation();
+  sendButton.disabled = isEmpty || isOverLimit || isSending;
+}
+
+function updateCommentUI() {
+  const { length, isOverLimit } = getCommentValidation();
+
+  charCounter.textContent = `${length}/${COMMENT_MAX_LENGTH}`;
+  charCounter.classList.toggle("is-over", isOverLimit);
+
+  if (isOverLimit) {
+    showCommentError(`文字数が上限(${COMMENT_MAX_LENGTH}文字)を超えています。`);
+  } else {
+    hideCommentError();
+  }
+
+  updateSendButtonDisabled();
+}
+
+async function sendComment(text) {
+  isSending = true;
+  sendButton.textContent = "送信中...";
+  hideCommentError();
+  updateSendButtonDisabled();
+
+  try {
+    const response = await fetch(`${COMMENT_SERVER_URL}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`送信に失敗しました (status: ${response.status})`);
+    }
+
+    commentInput.value = "";
+  } catch {
+    showCommentError("送信に失敗しました。通信環境をご確認のうえ、再送信してください。");
+  } finally {
+    isSending = false;
+    sendButton.textContent = "送信";
+    updateSendButtonDisabled();
+  }
+}
+
+function handleSendClick() {
+  const { value, isEmpty, isOverLimit } = getCommentValidation();
+  if (isEmpty || isOverLimit || isSending) return;
+  sendComment(value.trim());
+}
+
+commentInput.addEventListener("input", updateCommentUI);
+
+sendButton.addEventListener("click", handleSendClick);
+
+updateCommentUI();
