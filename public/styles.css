@@ -288,13 +288,100 @@ body {
   border-top: 1px solid var(--color-border);
 }
 
-.item-list {
+.item-panel {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.item-toggle-button {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  background: #fff;
+  border: none;
+  cursor: pointer;
+}
+
+.item-toggle-icon {
+  font-size: 10px;
+  color: #888;
+}
+
+.item-panel-body {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+}
+
+.item-panel-inner {
+  padding: 10px;
+  border-top: 1px solid var(--color-border);
+}
+
+.item-choice-list {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.item-choice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #333;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  cursor: pointer;
+}
+
+.item-choice:hover {
+  border-color: var(--color-accent);
+}
+
+.item-choice.is-selected {
+  color: var(--color-accent);
+  background: rgba(100, 65, 165, 0.1);
+  border-color: var(--color-accent);
+}
+
+.item-choice-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+
+.item-status {
   margin: 0;
-  padding: 0;
-  list-style: none;
+  font-size: 12px;
+  color: #666;
+}
+
+.item-status.is-error {
+  color: #d32f2f;
+}
+
+.item-retry-button {
+  margin-top: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #333;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  cursor: pointer;
 }
 
 .comment-row {
@@ -358,25 +445,6 @@ body {
   margin: 0;
   font-size: 12px;
   color: #d32f2f;
-}
-
-.item-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  color: #fff;
-  background: #333;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.item-icon {
-  width: 20px;
-  height: 20px;
 }
 
 /* タブレット以下: 動画を上、コメント欄を下に積む */

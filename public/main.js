@@ -272,3 +272,132 @@ commentInput.addEventListener("input", updateCommentUI);
 sendButton.addEventListener("click", handleSendClick);
 
 updateCommentUI();
+
+const ITEMS_URL = `${COMMENT_SERVER_URL}/items`;
+const ITEM_ICON_FALLBACK =
+  "data:image/svg+xml," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" rx="4" fill="#ccc"/></svg>'
+  );
+
+const itemToggleButton = document.getElementById("item-toggle-button");
+const itemToggleIcon = document.getElementById("item-toggle-icon");
+const itemPanelBody = document.getElementById("item-panel-body");
+const itemPanelInner = document.getElementById("item-panel-inner");
+const itemPanelContent = document.getElementById("item-panel-content");
+
+let isItemPanelOpen = false;
+let items = null;
+let isItemsLoading = false;
+let itemsError = null;
+let selectedItemId = null;
+
+// 将来の送信機能から選択中アイテムを参照するためのエントリポイント
+export function getSelectedItem() {
+  if (!items || !selectedItemId) return null;
+  return items.find((item) => item.id === selectedItemId) ?? null;
+}
+
+function syncItemPanelHeight() {
+  if (!isItemPanelOpen) {
+    itemPanelBody.style.maxHeight = "0px";
+    itemPanelBody.style.opacity = "0";
+    return;
+  }
+  itemPanelBody.style.maxHeight = `${itemPanelInner.scrollHeight}px`;
+  itemPanelBody.style.opacity = "1";
+}
+
+function handleItemClick(item) {
+  selectedItemId = selectedItemId === item.id ? null : item.id;
+  renderItemPanel();
+}
+
+function renderItemPanel() {
+  itemPanelContent.innerHTML = "";
+
+  if (isItemsLoading) {
+    const status = document.createElement("p");
+    status.className = "item-status";
+    status.textContent = "読み込み中...";
+    itemPanelContent.appendChild(status);
+  } else if (itemsError) {
+    const status = document.createElement("p");
+    status.className = "item-status is-error";
+    status.textContent = itemsError;
+    itemPanelContent.appendChild(status);
+
+    const retryButton = document.createElement("button");
+    retryButton.type = "button";
+    retryButton.className = "item-retry-button";
+    retryButton.textContent = "再取得";
+    retryButton.addEventListener("click", fetchItems);
+    itemPanelContent.appendChild(retryButton);
+  } else if (items) {
+    const list = document.createElement("div");
+    list.className = "item-choice-list";
+
+    items.forEach((item) => {
+      const isSelected = item.id === selectedItemId;
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "item-choice";
+      button.classList.toggle("is-selected", isSelected);
+      button.setAttribute("aria-pressed", String(isSelected));
+      button.addEventListener("click", () => handleItemClick(item));
+
+      const icon = document.createElement("img");
+      icon.className = "item-choice-icon";
+      icon.src = item.iconUrl;
+      icon.alt = item.name;
+      icon.addEventListener("error", () => {
+        icon.src = ITEM_ICON_FALLBACK;
+      }, { once: true });
+
+      const name = document.createElement("span");
+      name.textContent = item.name;
+
+      button.appendChild(icon);
+      button.appendChild(name);
+      list.appendChild(button);
+    });
+
+    itemPanelContent.appendChild(list);
+  }
+
+  syncItemPanelHeight();
+}
+
+async function fetchItems() {
+  isItemsLoading = true;
+  itemsError = null;
+  renderItemPanel();
+
+  try {
+    const response = await fetch(ITEMS_URL);
+    if (!response.ok) {
+      throw new Error(`アイテム一覧の取得に失敗しました (status: ${response.status})`);
+    }
+    const data = await response.json();
+    items = data.items ?? [];
+  } catch {
+    itemsError = "アイテム一覧の取得に失敗しました。";
+  } finally {
+    isItemsLoading = false;
+    renderItemPanel();
+  }
+}
+
+itemToggleButton.addEventListener("click", () => {
+  isItemPanelOpen = !isItemPanelOpen;
+  itemToggleButton.setAttribute("aria-expanded", String(isItemPanelOpen));
+  itemToggleIcon.textContent = isItemPanelOpen ? "▲" : "▼";
+  syncItemPanelHeight();
+
+  if (isItemPanelOpen && items === null && !isItemsLoading) {
+    fetchItems();
+  }
+});
+
+renderItemPanel();
