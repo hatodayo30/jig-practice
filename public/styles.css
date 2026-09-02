@@ -55,6 +55,7 @@ body {
 }
 
 .video-frame {
+  position: relative;
   flex: 0 0 auto;
   width: 100%;
   aspect-ratio: 8 / 3;
@@ -64,6 +65,123 @@ body {
   background: var(--color-video-bg);
   color: #999;
   font-size: 14px;
+}
+
+.video-player {
+  width: 100%;
+  height: 100%;
+  background: var(--color-video-bg);
+}
+
+.video-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 10px 8px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0));
+}
+
+.video-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.video-controls-spacer {
+  flex: 1 1 auto;
+}
+
+.seek-bar {
+  display: flex;
+  align-items: center;
+  padding: 6px 2px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.seek-bar-track {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.seek-bar-buffered {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0%;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.seek-bar-thumb {
+  position: absolute;
+  top: 50%;
+  left: 0%;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  transform: translate(-50%, -50%);
+}
+
+.live-button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #888;
+}
+
+.live-dot.is-live {
+  background: #e33e3e;
+}
+
+.video-control-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.video-control-btn:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.video-control-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .stream-meta {

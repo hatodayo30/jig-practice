@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>視聴画面</title>
     <link rel="stylesheet" href="/styles.css" />
-    <script src="/main.js" defer></script>
+    <script type="module" src="/main.js"></script>
   </head>
   <body>
     <header class="app-header">
@@ -14,7 +14,30 @@
     <div class="layout">
       <section class="video-area">
         <h2 class="area-title">動画</h2>
-        <div class="video-frame">動画表示領域</div>
+        <div class="video-frame">
+          <video id="stream-video" class="video-player" autoplay muted playsinline></video>
+          <div class="video-controls">
+            <div class="seek-bar" id="seek-bar" role="slider" aria-label="シークバー" tabindex="0">
+              <div class="seek-bar-track">
+                <div class="seek-bar-buffered" id="seek-bar-buffered"></div>
+                <div class="seek-bar-thumb" id="seek-bar-thumb"></div>
+              </div>
+            </div>
+            <div class="video-controls-row">
+              <button type="button" id="play-toggle" class="video-control-btn" aria-label="一時停止"></button>
+              <button type="button" id="mute-toggle" class="video-control-btn" aria-label="ミュート解除"></button>
+              <button type="button" id="live-button" class="live-button" aria-label="ライブに戻る">
+                <span class="live-dot" id="live-dot"></span>LIVE
+              </button>
+              <div class="video-controls-spacer"></div>
+              <button type="button" id="fullscreen-toggle" class="video-control-btn" aria-label="全画面表示">
+                <svg class="video-control-icon" viewBox="0 0 24 24" fill="none">
+                  <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
         <div class="stream-meta">
           <div class="streamer-icon"></div>
           <div class="stream-title-box">配信タイトル表示枠</div>

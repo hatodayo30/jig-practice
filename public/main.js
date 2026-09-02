@@ -1,0 +1,149 @@
+import Hls from "hls.js";
+
+const STREAM_URL = "https://intern-hls-server.tdmi0e341.workers.dev/stream.m3u8";
+const LIVE_EDGE_THRESHOLD_SECONDS = 9;
+
+const video = document.getElementById("stream-video");
+const videoFrame = video.closest(".video-frame");
+const playToggleBtn = document.getElementById("play-toggle");
+const muteToggleBtn = document.getElementById("mute-toggle");
+const fullscreenToggleBtn = document.getElementById("fullscreen-toggle");
+const liveButton = document.getElementById("live-button");
+const liveDot = document.getElementById("live-dot");
+const seekBar = document.getElementById("seek-bar");
+const seekBarBuffered = document.getElementById("seek-bar-buffered");
+const seekBarThumb = document.getElementById("seek-bar-thumb");
+
+function startPlayback() {
+  video.play().catch(() => {});
+}
+
+if (Hls.isSupported()) {
+  const hls = new Hls({ liveDurationInfinity: true });
+  hls.loadSource(STREAM_URL);
+  hls.attachMedia(video);
+  hls.on(Hls.Events.MANIFEST_PARSED, startPlayback);
+} else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+  video.src = STREAM_URL;
+  video.addEventListener("loadedmetadata", startPlayback);
+}
+
+const PLAY_ICON =
+  '<svg class="video-control-icon" viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7L8 5Z" fill="currentColor" /></svg>';
+const PAUSE_ICON =
+  '<svg class="video-control-icon" viewBox="0 0 24 24" fill="none"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor" /><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor" /></svg>';
+const MUTED_ICON =
+  '<svg class="video-control-icon" viewBox="0 0 24 24" fill="none"><path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor" /><path d="M16.5 8.5 L20.5 15.5 M20.5 8.5 L16.5 15.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>';
+const UNMUTED_ICON =
+  '<svg class="video-control-icon" viewBox="0 0 24 24" fill="none"><path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor" /><path d="M16.5 8.5c1.4 1.2 1.4 5.8 0 7" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" /><path d="M19 6.5c2.5 2.3 2.5 8.7 0 11" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" /></svg>';
+
+function updatePlayToggle() {
+  const isPaused = video.paused;
+  playToggleBtn.innerHTML = isPaused ? PLAY_ICON : PAUSE_ICON;
+  playToggleBtn.setAttribute("aria-label", isPaused ? "再生" : "一時停止");
+}
+
+function updateMuteToggle() {
+  const isMuted = video.muted;
+  muteToggleBtn.innerHTML = isMuted ? MUTED_ICON : UNMUTED_ICON;
+  muteToggleBtn.setAttribute("aria-label", isMuted ? "ミュート解除" : "ミュート");
+}
+
+video.addEventListener("play", updatePlayToggle);
+video.addEventListener("pause", updatePlayToggle);
+video.addEventListener("volumechange", updateMuteToggle);
+
+playToggleBtn.addEventListener("click", () => {
+  if (video.paused) {
+    video.play();
+  } else {
+    video.pause();
+  }
+});
+
+muteToggleBtn.addEventListener("click", () => {
+  video.muted = !video.muted;
+});
+
+fullscreenToggleBtn.addEventListener("click", () => {
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+  } else {
+    videoFrame.requestFullscreen();
+  }
+});
+
+function getSeekableRange() {
+  const seekable = video.seekable;
+  if (seekable.length === 0) return null;
+  return { start: seekable.start(0), end: seekable.end(seekable.length - 1) };
+}
+
+function updateSeekBar() {
+  const range = getSeekableRange();
+  if (!range || range.end <= range.start) {
+    seekBarBuffered.style.width = "0%";
+    seekBarThumb.style.left = "0%";
+    liveButton.classList.remove("is-live");
+    liveDot.classList.remove("is-live");
+    return;
+  }
+
+  const span = range.end - range.start;
+  const position = Math.min(Math.max(video.currentTime - range.start, 0), span);
+  seekBarBuffered.style.width = "100%";
+  seekBarThumb.style.left = `${(position / span) * 100}%`;
+
+  const isLive = range.end - video.currentTime <= LIVE_EDGE_THRESHOLD_SECONDS;
+  liveButton.classList.toggle("is-live", isLive);
+  liveDot.classList.toggle("is-live", isLive);
+}
+
+function seekToRatio(ratio) {
+  const range = getSeekableRange();
+  if (!range) return;
+  const span = range.end - range.start;
+  video.currentTime = range.start + Math.min(Math.max(ratio, 0), 1) * span;
+}
+
+function ratioFromPointerEvent(event) {
+  const rect = seekBar.getBoundingClientRect();
+  return (event.clientX - rect.left) / rect.width;
+}
+
+let isSeeking = false;
+
+seekBar.addEventListener("pointerdown", (event) => {
+  isSeeking = true;
+  seekBar.setPointerCapture(event.pointerId);
+  seekToRatio(ratioFromPointerEvent(event));
+});
+
+seekBar.addEventListener("pointermove", (event) => {
+  if (!isSeeking) return;
+  seekToRatio(ratioFromPointerEvent(event));
+});
+
+function endSeek(event) {
+  if (!isSeeking) return;
+  isSeeking = false;
+  seekBar.releasePointerCapture(event.pointerId);
+}
+
+seekBar.addEventListener("pointerup", endSeek);
+seekBar.addEventListener("pointercancel", endSeek);
+
+liveButton.addEventListener("click", () => {
+  const range = getSeekableRange();
+  if (!range) return;
+  video.currentTime = range.end;
+  startPlayback();
+});
+
+video.addEventListener("timeupdate", updateSeekBar);
+video.addEventListener("progress", updateSeekBar);
+video.addEventListener("durationchange", updateSeekBar);
+
+updatePlayToggle();
+updateMuteToggle();
+updateSeekBar();
