@@ -705,3 +705,62 @@ document.addEventListener("keydown", (event) => {
 renderItemPanel();
 renderSelectedItemPreview();
 updateCommentUI();
+
+// --- 配信者プロフィール・視聴者数(モック)表示 ---
+// バックエンドと未接続のため、配信者情報・視聴者数はモックデータで表示する
+const streamerIconEl = document.getElementById("streamer-icon");
+const streamTitleBoxEl = document.getElementById("stream-title-box");
+const viewerCountBoxEl = document.getElementById("viewer-count-box");
+
+const MOCK_STREAMER = {
+  name: "はると",
+  label: "雑談・ゲーム実況チャンネル",
+  iconColor: "#6441a5",
+};
+
+// 実画像を用意せず、名前の頭文字を円形アイコンとして描画したdata URIを生成する
+function initialAvatarDataUrl(name, color) {
+  const initial = name.slice(0, 1);
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36">` +
+    `<circle cx="18" cy="18" r="18" fill="${color}" />` +
+    `<text x="18" y="24" font-size="16" font-family="sans-serif" fill="#fff" text-anchor="middle">${initial}</text>` +
+    `</svg>`;
+  return "data:image/svg+xml," + encodeURIComponent(svg);
+}
+
+const streamerIconImg = document.createElement("img");
+streamerIconImg.className = "streamer-icon-img";
+streamerIconImg.src = initialAvatarDataUrl(MOCK_STREAMER.name, MOCK_STREAMER.iconColor);
+streamerIconImg.alt = MOCK_STREAMER.name;
+streamerIconEl.appendChild(streamerIconImg);
+
+streamTitleBoxEl.textContent = "";
+const streamerNameEl = document.createElement("span");
+streamerNameEl.className = "streamer-name";
+streamerNameEl.textContent = MOCK_STREAMER.name;
+const streamerLabelEl = document.createElement("span");
+streamerLabelEl.className = "streamer-label";
+streamerLabelEl.textContent = MOCK_STREAMER.label;
+streamTitleBoxEl.appendChild(streamerNameEl);
+streamTitleBoxEl.appendChild(streamerLabelEl);
+
+// 視聴者数のモック表示。数秒おきに小さくランダム増減させてライブ感を出す
+const VIEWER_COUNT_INITIAL = 1240;
+const VIEWER_COUNT_MIN = 100;
+const VIEWER_COUNT_MAX_DELTA = 15;
+const VIEWER_COUNT_UPDATE_INTERVAL_MS = 4000;
+
+let viewerCount = VIEWER_COUNT_INITIAL;
+
+function renderViewerCount() {
+  viewerCountBoxEl.textContent = `${viewerCount.toLocaleString()}人視聴中`;
+}
+
+renderViewerCount();
+
+setInterval(() => {
+  const delta = Math.floor(Math.random() * (VIEWER_COUNT_MAX_DELTA * 2 + 1)) - VIEWER_COUNT_MAX_DELTA;
+  viewerCount = Math.max(VIEWER_COUNT_MIN, viewerCount + delta);
+  renderViewerCount();
+}, VIEWER_COUNT_UPDATE_INTERVAL_MS);
