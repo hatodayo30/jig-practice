@@ -320,12 +320,54 @@ const COMMENT_SERVER_URL = "https://intern-comment-server.intern-comment-server.
 const commentList = document.getElementById("comment-list");
 const COMMENT_HIGHLIGHT_DURATION_MS = 1500;
 
+// --- ギフトアニメーション演出 ---
+// アイテムがanimationUrlを持つ場合、動画エリア上にポップアップ表示してからフェードアウトする
+const giftAnimationLayer = document.getElementById("gift-animation-layer");
+const GIFT_ANIMATION_DISPLAY_MS = 3200;
+const GIFT_ANIMATION_FADE_MS = 250;
+
+function playGiftAnimation(item) {
+  if (!item?.animationUrl) return;
+
+  const img = document.createElement("img");
+  img.className = "gift-animation-item";
+  img.src = item.animationUrl;
+  img.alt = item.name;
+  img.addEventListener("error", () => {
+    img.src = item.iconUrl;
+  }, { once: true });
+
+  giftAnimationLayer.appendChild(img);
+
+  setTimeout(() => {
+    img.classList.add("is-leaving");
+  }, GIFT_ANIMATION_DISPLAY_MS - GIFT_ANIMATION_FADE_MS);
+
+  setTimeout(() => {
+    img.remove();
+  }, GIFT_ANIMATION_DISPLAY_MS);
+}
+
+// アイテムIDから薄いパステルカラーを一意に導出する(同じIDなら常に同じ色になる)
+function pastelColorForItemId(id) {
+  let hash = 0;
+  for (let i = 0; i < id.length; i += 1) {
+    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  const hue = hash % 360;
+  return `hsl(${hue}, 70%, 90%)`;
+}
+
 // 1件のコメント(テキストおよび/または選択されたアイテム)をリストに描画する
 function renderCommentEntry({ text, item }) {
+  if (item) playGiftAnimation(item);
+
   const li = document.createElement("li");
   li.className = "comment-item";
 
   if (item) {
+    li.style.setProperty("--item-bg-color", pastelColorForItemId(item.id));
+
     const icon = document.createElement("img");
     icon.className = "comment-item-icon";
     icon.src = item.iconUrl;
@@ -447,6 +489,7 @@ async function sendComment() {
     commentInput.value = "";
     selectedItemId = null;
     renderItemPanel();
+    renderSelectedItemPreview();
     updateCommentUI();
   } catch {
     showCommentError("送信に失敗しました。通信環境をご確認のうえ、再送信してください。");
@@ -497,9 +540,13 @@ function hexToRgbString(hex) {
 }
 
 const itemToggleButton = document.getElementById("item-toggle-button");
+const itemPanelBackdrop = document.getElementById("item-panel-backdrop");
 const itemPanelBody = document.getElementById("item-panel-body");
-const itemPanelInner = document.getElementById("item-panel-inner");
 const itemPanelContent = document.getElementById("item-panel-content");
+const itemPanelCloseButton = document.getElementById("item-panel-close");
+const selectedItemPreview = document.getElementById("selected-item-preview");
+const selectedItemPreviewIcon = document.getElementById("selected-item-preview-icon");
+const selectedItemPreviewName = document.getElementById("selected-item-preview-name");
 
 // アイテムパネルの開閉状態、取得済みアイテム一覧、読み込み/エラー状態、選択中アイテムID
 let isItemPanelOpen = false;
@@ -514,20 +561,43 @@ export function getSelectedItem() {
   return items.find((item) => item.id === selectedItemId) ?? null;
 }
 
-// アイテムパネルの開閉アニメーション用に、中身の高さに合わせてmax-heightを設定する
-function syncItemPanelHeight() {
+// アイテムパネル(オーバーレイ)と背景の開閉状態を反映する
+function syncItemPanelOpenState() {
   itemPanelBody.classList.toggle("is-open", isItemPanelOpen);
-  if (!isItemPanelOpen) {
-    itemPanelBody.style.maxHeight = "0px";
+  itemPanelBackdrop.classList.toggle("is-open", isItemPanelOpen);
+}
+
+function closeItemPanel() {
+  if (!isItemPanelOpen) return;
+  isItemPanelOpen = false;
+  itemToggleButton.setAttribute("aria-expanded", "false");
+  itemToggleButton.classList.remove("is-open");
+  syncItemPanelOpenState();
+}
+
+// ギフトボタン左の余白に、選択中アイテムのアイコン・名前をプレビュー表示する
+function renderSelectedItemPreview() {
+  const item = getSelectedItem();
+
+  if (!item) {
+    selectedItemPreview.hidden = true;
     return;
   }
-  itemPanelBody.style.maxHeight = `${itemPanelInner.scrollHeight}px`;
+
+  const themeColor = getItemThemeColor(item.id);
+  selectedItemPreview.style.setProperty("--item-color", themeColor);
+  selectedItemPreview.style.setProperty("--item-color-rgb", hexToRgbString(themeColor));
+  selectedItemPreviewIcon.src = item.iconUrl;
+  selectedItemPreviewIcon.alt = item.name;
+  selectedItemPreviewName.textContent = item.name;
+  selectedItemPreview.hidden = false;
 }
 
 // アイテムクリック時のトグル選択(同じアイテムを再クリックすると選択解除)
 function handleItemClick(item) {
   selectedItemId = selectedItemId === item.id ? null : item.id;
   renderItemPanel();
+  renderSelectedItemPreview();
   updateSendButtonDisabled();
 }
 
@@ -579,6 +649,7 @@ function renderItemPanel() {
       }, { once: true });
 
       const name = document.createElement("span");
+      name.className = "item-choice-name";
       name.textContent = item.name;
 
       button.appendChild(icon);
@@ -588,8 +659,6 @@ function renderItemPanel() {
 
     itemPanelContent.appendChild(list);
   }
-
-  syncItemPanelHeight();
 }
 
 // アイテム一覧をサーバーから取得する(初回パネル表示時・再取得ボタン押下時に呼ばれる)
@@ -618,12 +687,21 @@ itemToggleButton.addEventListener("click", () => {
   isItemPanelOpen = !isItemPanelOpen;
   itemToggleButton.setAttribute("aria-expanded", String(isItemPanelOpen));
   itemToggleButton.classList.toggle("is-open", isItemPanelOpen);
-  syncItemPanelHeight();
+  syncItemPanelOpenState();
 
   if (isItemPanelOpen && items === null && !isItemsLoading) {
     fetchItems();
   }
 });
 
+// 背景クリック、✕ボタン、またはEscapeキーでオーバーレイを閉じる
+itemPanelBackdrop.addEventListener("click", closeItemPanel);
+itemPanelCloseButton.addEventListener("click", closeItemPanel);
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeItemPanel();
+});
+
 renderItemPanel();
+renderSelectedItemPreview();
 updateCommentUI();

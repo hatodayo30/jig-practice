@@ -16,6 +16,7 @@
         <h2 class="area-title">動画</h2>
         <div class="video-frame">
           <video id="stream-video" class="video-player" autoplay muted playsinline></video>
+          <div class="gift-animation-layer" id="gift-animation-layer" aria-hidden="true"></div>
           <pre id="debug-overlay" class="debug-overlay" hidden></pre>
           <div class="video-controls">
             <div class="seek-bar" id="seek-bar" role="slider" aria-label="シークバー" tabindex="0">
@@ -50,9 +51,23 @@
         <section class="comment-area">
           <h2 class="area-title">コメント</h2>
           <ul class="comment-list" id="comment-list"></ul>
+          <div class="item-panel-backdrop" id="item-panel-backdrop"></div>
+          <div class="item-panel-body" id="item-panel-body">
+            <div class="item-panel-inner" id="item-panel-inner">
+              <div class="item-panel-header">
+                <span class="item-panel-title">ギフトを選ぶ</span>
+                <button type="button" id="item-panel-close" class="item-panel-close" aria-label="閉じる">✕</button>
+              </div>
+              <div id="item-panel-content" class="item-panel-content"></div>
+            </div>
+          </div>
         </section>
         <section class="send-area">
           <div class="gift-row">
+            <div class="selected-item-preview" id="selected-item-preview" hidden>
+              <img class="selected-item-preview-icon" id="selected-item-preview-icon" alt="" />
+              <span class="selected-item-preview-name" id="selected-item-preview-name"></span>
+            </div>
             <button
               type="button"
               id="item-toggle-button"
@@ -63,11 +78,6 @@
               <span class="gift-button-icon" aria-hidden="true">★</span>
               <span>ギフト</span>
             </button>
-          </div>
-          <div class="item-panel-body" id="item-panel-body">
-            <div class="item-panel-inner" id="item-panel-inner">
-              <div id="item-panel-content"></div>
-            </div>
           </div>
           <div class="comment-row">
             <textarea id="comment-input" class="comment-input" placeholder="コメントを入力" rows="2"></textarea>
