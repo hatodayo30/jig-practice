@@ -358,6 +358,13 @@ function pastelColorForItemId(id) {
   return `hsl(${hue}, 70%, 90%)`;
 }
 
+// NGワードフィルタ。送受信データ自体は変更せず、表示直前にマスクする
+const NG_WORDS = ["死ね", "殺す", "きえろ", "バカ", "アホ"];
+
+function maskNgWords(text) {
+  return NG_WORDS.reduce((masked, word) => (word ? masked.split(word).join("***") : masked), text);
+}
+
 // 1件のコメント(テキストおよび/または選択されたアイテム)をリストに描画する
 function renderCommentEntry({ text, item }) {
   if (item) playGiftAnimation(item);
@@ -378,7 +385,7 @@ function renderCommentEntry({ text, item }) {
 
   if (text) {
     if (item) li.appendChild(document.createTextNode(" "));
-    li.appendChild(document.createTextNode(text));
+    li.appendChild(document.createTextNode(maskNgWords(text)));
   }
 
   if (!item && !text) return;
@@ -716,6 +723,7 @@ const MOCK_STREAMER = {
   name: "はると",
   label: "雑談・ゲーム実況チャンネル",
   iconColor: "#6441a5",
+  tags: ["雑談", "ゲーム"],
 };
 
 // 実画像を用意せず、名前の頭文字を円形アイコンとして描画したdata URIを生成する
@@ -745,6 +753,17 @@ streamerLabelEl.textContent = MOCK_STREAMER.label;
 streamTitleBoxEl.appendChild(streamerNameEl);
 streamTitleBoxEl.appendChild(streamerLabelEl);
 
+// 配信カテゴリ/ジャンルのモックタグバッジ
+const tagRowEl = document.createElement("div");
+tagRowEl.className = "stream-tag-row";
+MOCK_STREAMER.tags.forEach((tag) => {
+  const badge = document.createElement("span");
+  badge.className = "stream-tag-badge";
+  badge.textContent = tag;
+  tagRowEl.appendChild(badge);
+});
+streamTitleBoxEl.appendChild(tagRowEl);
+
 // 視聴者数のモック表示。数秒おきに小さくランダム増減させてライブ感を出す
 const VIEWER_COUNT_INITIAL = 1240;
 const VIEWER_COUNT_MIN = 100;
@@ -764,3 +783,67 @@ setInterval(() => {
   viewerCount = Math.max(VIEWER_COUNT_MIN, viewerCount + delta);
   renderViewerCount();
 }, VIEWER_COUNT_UPDATE_INTERVAL_MS);
+
+// --- フォロー/通知ベルのトグル(モック、localStorageに状態保存) ---
+const FOLLOW_STORAGE_KEY = `follow:${MOCK_STREAMER.name}`;
+const followToggleButton = document.getElementById("follow-toggle-button");
+const followToggleIcon = document.getElementById("follow-toggle-icon");
+const followToggleLabel = document.getElementById("follow-toggle-label");
+
+let isFollowing = localStorage.getItem(FOLLOW_STORAGE_KEY) === "true";
+
+function renderFollowToggle() {
+  followToggleButton.classList.toggle("is-following", isFollowing);
+  followToggleButton.setAttribute("aria-pressed", String(isFollowing));
+  followToggleIcon.textContent = isFollowing ? "🔔" : "🔕";
+  followToggleLabel.textContent = isFollowing ? "フォロー中" : "フォロー";
+}
+
+followToggleButton.addEventListener("click", () => {
+  isFollowing = !isFollowing;
+  localStorage.setItem(FOLLOW_STORAGE_KEY, String(isFollowing));
+  renderFollowToggle();
+});
+
+renderFollowToggle();
+
+// --- いいねボタン(モック、クリックのたびにカウントアップ+アニメーション) ---
+const LIKE_COUNT_STORAGE_KEY = "likeCount";
+const LIKE_BUTTON_ANIMATION_MS = 350;
+const LIKE_PARTICLE_LIFETIME_MS = 900;
+const LIKE_PARTICLES = ["❤️", "💗", "💕"];
+
+const likeButton = document.getElementById("like-button");
+const likeCountEl = document.getElementById("like-count");
+const likeParticleLayer = document.getElementById("like-particle-layer");
+
+let likeCount = Number(localStorage.getItem(LIKE_COUNT_STORAGE_KEY)) || 0;
+
+function renderLikeCount() {
+  likeCountEl.textContent = likeCount.toLocaleString();
+}
+
+function spawnLikeParticle() {
+  const particle = document.createElement("span");
+  particle.className = "like-particle";
+  particle.textContent = LIKE_PARTICLES[Math.floor(Math.random() * LIKE_PARTICLES.length)];
+  particle.style.setProperty("--drift", `${Math.floor(Math.random() * 30) - 15}px`);
+  particle.style.left = `${8 + Math.random() * 16}px`;
+  likeParticleLayer.appendChild(particle);
+  setTimeout(() => particle.remove(), LIKE_PARTICLE_LIFETIME_MS);
+}
+
+renderLikeCount();
+
+likeButton.addEventListener("click", () => {
+  likeCount += 1;
+  localStorage.setItem(LIKE_COUNT_STORAGE_KEY, String(likeCount));
+  renderLikeCount();
+
+  spawnLikeParticle();
+  likeButton.classList.remove("is-liked");
+  // eslint-disable-next-line no-unused-expressions
+  likeButton.offsetWidth; // reflowさせてアニメーションを再トリガーする
+  likeButton.classList.add("is-liked");
+  setTimeout(() => likeButton.classList.remove("is-liked"), LIKE_BUTTON_ANIMATION_MS);
+});

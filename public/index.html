@@ -3,92 +3,26 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>視聴画面</title>
+    <title>ホーム</title>
     <link rel="stylesheet" href="/styles.css" />
-    <script type="module" src="/main.js"></script>
+    <link rel="stylesheet" href="/home.css" />
+    <script type="module" src="/theme.js"></script>
+    <script type="module" src="/home.js"></script>
   </head>
   <body>
     <header class="app-header">
-      <h1>視聴画面</h1>
+      <h1>ホーム</h1>
+      <button type="button" id="theme-toggle" class="theme-toggle-button" aria-label="ダークモードに切り替え"></button>
     </header>
-    <div class="layout">
-      <section class="video-area">
-        <h2 class="area-title">動画</h2>
-        <div class="video-frame">
-          <video id="stream-video" class="video-player" autoplay muted playsinline></video>
-          <div class="gift-animation-layer" id="gift-animation-layer" aria-hidden="true"></div>
-          <pre id="debug-overlay" class="debug-overlay" hidden></pre>
-          <div class="video-controls">
-            <div class="seek-bar" id="seek-bar" role="slider" aria-label="シークバー" tabindex="0">
-              <div class="seek-bar-track">
-                <div class="seek-bar-buffered" id="seek-bar-buffered"></div>
-                <div class="seek-bar-thumb" id="seek-bar-thumb"></div>
-              </div>
-            </div>
-            <div class="video-controls-row">
-              <button type="button" id="play-toggle" class="video-control-btn" aria-label="一時停止"></button>
-              <button type="button" id="mute-toggle" class="video-control-btn" aria-label="ミュート解除"></button>
-              <button type="button" id="live-button" class="live-button" aria-label="ライブに戻る">
-                <span class="live-dot" id="live-dot"></span>LIVE
-              </button>
-              <span id="elapsed-time" class="elapsed-time">--:--</span>
-              <div class="video-controls-spacer"></div>
-              <button type="button" id="fullscreen-toggle" class="video-control-btn" aria-label="全画面表示">
-                <svg class="video-control-icon" viewBox="0 0 24 24" fill="none">
-                  <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-        <div class="stream-meta">
-          <div class="streamer-icon" id="streamer-icon"></div>
-          <div class="stream-title-box" id="stream-title-box">配信タイトル表示枠</div>
-          <div class="viewer-count-box" id="viewer-count-box">視聴者数表示枠</div>
-        </div>
+    <main class="home-main">
+      <section class="stream-section">
+        <h2 class="stream-section-title">おすすめ配信</h2>
+        <div class="stream-grid stream-grid--recommended" id="recommended-stream-grid"></div>
       </section>
-      <aside class="side-area">
-        <section class="comment-area">
-          <h2 class="area-title">コメント</h2>
-          <ul class="comment-list" id="comment-list"></ul>
-          <div class="item-panel-backdrop" id="item-panel-backdrop"></div>
-          <div class="item-panel-body" id="item-panel-body">
-            <div class="item-panel-inner" id="item-panel-inner">
-              <div class="item-panel-header">
-                <span class="item-panel-title">ギフトを選ぶ</span>
-                <button type="button" id="item-panel-close" class="item-panel-close" aria-label="閉じる">✕</button>
-              </div>
-              <div id="item-panel-content" class="item-panel-content"></div>
-            </div>
-          </div>
-        </section>
-        <section class="send-area">
-          <div class="gift-row">
-            <div class="selected-item-preview" id="selected-item-preview" hidden>
-              <img class="selected-item-preview-icon" id="selected-item-preview-icon" alt="" />
-              <span class="selected-item-preview-name" id="selected-item-preview-name"></span>
-            </div>
-            <button
-              type="button"
-              id="item-toggle-button"
-              class="gift-button"
-              aria-expanded="false"
-              aria-controls="item-panel-body"
-            >
-              <span class="gift-button-icon" aria-hidden="true">★</span>
-              <span>ギフト</span>
-            </button>
-          </div>
-          <div class="comment-row">
-            <textarea id="comment-input" class="comment-input" placeholder="コメントを入力" rows="2"></textarea>
-            <button type="button" id="send-button" class="send-button">送信</button>
-          </div>
-          <div class="comment-meta-row">
-            <span id="char-counter" class="char-counter">0/200</span>
-          </div>
-          <p id="comment-error" class="comment-error" role="alert" hidden></p>
-        </section>
-      </aside>
-    </div>
+      <section class="stream-section">
+        <h2 class="stream-section-title">配信一覧</h2>
+        <div class="stream-grid" id="stream-grid"></div>
+      </section>
+    </main>
   </body>
 </html>
