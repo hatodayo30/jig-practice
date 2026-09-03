@@ -2,7 +2,18 @@
 // 現状はモック配列を返すだけだが、本物のAPIに差し替えやすいよう
 // データ取得部分を非同期関数(fetchStreams/fetchRecommendedStreams)として分離している。
 
-const MOCK_STREAMS = [
+export interface Stream {
+  id: string;
+  title: string;
+  streamerName: string;
+  viewerCount: number;
+  category: string;
+  thumbnailColor: string;
+  isRecommended: boolean;
+  channelId: string;
+}
+
+const MOCK_STREAMS: Stream[] = [
   {
     id: "1",
     title: "雑談しながらのんびりゲーム実況",
@@ -11,6 +22,7 @@ const MOCK_STREAMS = [
     category: "雑談・ゲーム実況",
     thumbnailColor: "#6441a5",
     isRecommended: true,
+    channelId: "llamigos",
   },
   {
     id: "2",
@@ -20,6 +32,7 @@ const MOCK_STREAMS = [
     category: "ゲーム実況",
     thumbnailColor: "#e75480",
     isRecommended: true,
+    channelId: "llama-drama",
   },
   {
     id: "3",
@@ -29,6 +42,7 @@ const MOCK_STREAMS = [
     category: "作業・勉強",
     thumbnailColor: "#3b82f6",
     isRecommended: false,
+    channelId: "gran-dillama",
   },
   {
     id: "4",
@@ -38,6 +52,7 @@ const MOCK_STREAMS = [
     category: "音楽",
     thumbnailColor: "#f59e0b",
     isRecommended: true,
+    channelId: "llamigos",
   },
   {
     id: "5",
@@ -47,6 +62,7 @@ const MOCK_STREAMS = [
     category: "ゲーム実況",
     thumbnailColor: "#10b981",
     isRecommended: false,
+    channelId: "llama-drama",
   },
   {
     id: "6",
@@ -56,14 +72,15 @@ const MOCK_STREAMS = [
     category: "料理",
     thumbnailColor: "#ef4444",
     isRecommended: false,
+    channelId: "gran-dillama",
   },
 ];
 
 // 本物のAPIに差し替える際は、この中身をfetch呼び出しに置き換える想定。
-export async function fetchStreams() {
+export async function fetchStreams(): Promise<Stream[]> {
   return MOCK_STREAMS;
 }
 
-export async function fetchRecommendedStreams() {
+export async function fetchRecommendedStreams(): Promise<Stream[]> {
   return MOCK_STREAMS.filter((stream) => stream.isRecommended);
 }
