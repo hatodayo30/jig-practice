@@ -150,6 +150,7 @@ updateSeekBar();
 
 const COMMENT_SERVER_URL = "https://intern-comment-server.intern-comment-server.deno.net";
 const commentList = document.getElementById("comment-list");
+const COMMENT_HIGHLIGHT_DURATION_MS = 1500;
 
 function renderCommentEntry({ text, item }) {
   const li = document.createElement("li");
@@ -173,6 +174,9 @@ function renderCommentEntry({ text, item }) {
 
   commentList.appendChild(li);
   commentList.scrollTop = commentList.scrollHeight;
+
+  li.classList.add("is-new");
+  setTimeout(() => li.classList.remove("is-new"), COMMENT_HIGHLIGHT_DURATION_MS);
 }
 
 const commentEvents = new EventSource(`${COMMENT_SERVER_URL}/events`);
@@ -280,8 +284,25 @@ const ITEM_ICON_FALLBACK =
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" rx="4" fill="#ccc"/></svg>'
   );
 
+const ITEM_THEME_COLORS = {
+  heart: "#ff4d6d",
+  star: "#ffb703",
+  flower: "#4caf50",
+};
+const ITEM_THEME_FALLBACK_COLOR = "#9e9e9e";
+
+function getItemThemeColor(id) {
+  return ITEM_THEME_COLORS[id] ?? ITEM_THEME_FALLBACK_COLOR;
+}
+
+function hexToRgbString(hex) {
+  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!match) return "158, 158, 158";
+  const [, r, g, b] = match;
+  return `${parseInt(r, 16)}, ${parseInt(g, 16)}, ${parseInt(b, 16)}`;
+}
+
 const itemToggleButton = document.getElementById("item-toggle-button");
-const itemToggleIcon = document.getElementById("item-toggle-icon");
 const itemPanelBody = document.getElementById("item-panel-body");
 const itemPanelInner = document.getElementById("item-panel-inner");
 const itemPanelContent = document.getElementById("item-panel-content");
@@ -299,13 +320,12 @@ export function getSelectedItem() {
 }
 
 function syncItemPanelHeight() {
+  itemPanelBody.classList.toggle("is-open", isItemPanelOpen);
   if (!isItemPanelOpen) {
     itemPanelBody.style.maxHeight = "0px";
-    itemPanelBody.style.opacity = "0";
     return;
   }
   itemPanelBody.style.maxHeight = `${itemPanelInner.scrollHeight}px`;
-  itemPanelBody.style.opacity = "1";
 }
 
 function handleItemClick(item) {
@@ -340,11 +360,15 @@ function renderItemPanel() {
     items.forEach((item) => {
       const isSelected = item.id === selectedItemId;
 
+      const themeColor = getItemThemeColor(item.id);
+
       const button = document.createElement("button");
       button.type = "button";
       button.className = "item-choice";
       button.classList.toggle("is-selected", isSelected);
       button.setAttribute("aria-pressed", String(isSelected));
+      button.style.setProperty("--item-color", themeColor);
+      button.style.setProperty("--item-color-rgb", hexToRgbString(themeColor));
       button.addEventListener("click", () => handleItemClick(item));
 
       const icon = document.createElement("img");
@@ -392,7 +416,7 @@ async function fetchItems() {
 itemToggleButton.addEventListener("click", () => {
   isItemPanelOpen = !isItemPanelOpen;
   itemToggleButton.setAttribute("aria-expanded", String(isItemPanelOpen));
-  itemToggleIcon.textContent = isItemPanelOpen ? "▲" : "▼";
+  itemToggleButton.classList.toggle("is-open", isItemPanelOpen);
   syncItemPanelHeight();
 
   if (isItemPanelOpen && items === null && !isItemsLoading) {
