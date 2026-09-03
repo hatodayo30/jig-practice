@@ -218,9 +218,14 @@ function hideCommentError() {
   commentError.textContent = "";
 }
 
-function updateSendButtonDisabled() {
+function canSend() {
   const { isEmpty, isOverLimit } = getCommentValidation();
-  sendButton.disabled = isEmpty || isOverLimit || isSending;
+  const hasItem = selectedItemId !== null;
+  return (!isEmpty || hasItem) && !isOverLimit && !isSending;
+}
+
+function updateSendButtonDisabled() {
+  sendButton.disabled = !canSend();
 }
 
 function updateCommentUI() {
@@ -238,7 +243,16 @@ function updateCommentUI() {
   updateSendButtonDisabled();
 }
 
-async function sendComment(text) {
+async function sendComment() {
+  const { value, isOverLimit } = getCommentValidation();
+  const text = value.trim();
+  const itemId = selectedItemId;
+  if ((!text && !itemId) || isOverLimit || isSending) return;
+
+  const payload = {};
+  if (text) payload.text = text;
+  if (itemId) payload.itemId = itemId;
+
   isSending = true;
   sendButton.textContent = "送信中...";
   hideCommentError();
@@ -248,7 +262,7 @@ async function sendComment(text) {
     const response = await fetch(`${COMMENT_SERVER_URL}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
@@ -256,6 +270,9 @@ async function sendComment(text) {
     }
 
     commentInput.value = "";
+    selectedItemId = null;
+    renderItemPanel();
+    updateCommentUI();
   } catch {
     showCommentError("送信に失敗しました。通信環境をご確認のうえ、再送信してください。");
   } finally {
@@ -266,16 +283,13 @@ async function sendComment(text) {
 }
 
 function handleSendClick() {
-  const { value, isEmpty, isOverLimit } = getCommentValidation();
-  if (isEmpty || isOverLimit || isSending) return;
-  sendComment(value.trim());
+  if (!canSend()) return;
+  sendComment();
 }
 
 commentInput.addEventListener("input", updateCommentUI);
 
 sendButton.addEventListener("click", handleSendClick);
-
-updateCommentUI();
 
 const ITEMS_URL = `${COMMENT_SERVER_URL}/items`;
 const ITEM_ICON_FALLBACK =
@@ -331,6 +345,7 @@ function syncItemPanelHeight() {
 function handleItemClick(item) {
   selectedItemId = selectedItemId === item.id ? null : item.id;
   renderItemPanel();
+  updateSendButtonDisabled();
 }
 
 function renderItemPanel() {
@@ -425,3 +440,4 @@ itemToggleButton.addEventListener("click", () => {
 });
 
 renderItemPanel();
+updateCommentUI();
