@@ -159,6 +159,28 @@ body {
   background: #e33e3e;
 }
 
+.elapsed-time {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.debug-overlay {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 5;
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: #0f0;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 4px;
+  white-space: pre;
+  pointer-events: none;
+}
+
 .video-control-btn {
   display: flex;
   align-items: center;

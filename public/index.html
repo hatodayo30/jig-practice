@@ -16,6 +16,7 @@
         <h2 class="area-title">動画</h2>
         <div class="video-frame">
           <video id="stream-video" class="video-player" autoplay muted playsinline></video>
+          <pre id="debug-overlay" class="debug-overlay" hidden></pre>
           <div class="video-controls">
             <div class="seek-bar" id="seek-bar" role="slider" aria-label="シークバー" tabindex="0">
               <div class="seek-bar-track">
@@ -29,6 +30,7 @@
               <button type="button" id="live-button" class="live-button" aria-label="ライブに戻る">
                 <span class="live-dot" id="live-dot"></span>LIVE
               </button>
+              <span id="elapsed-time" class="elapsed-time">--:--</span>
               <div class="video-controls-spacer"></div>
               <button type="button" id="fullscreen-toggle" class="video-control-btn" aria-label="全画面表示">
                 <svg class="video-control-icon" viewBox="0 0 24 24" fill="none">
