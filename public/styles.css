@@ -1,9 +1,66 @@
+/* ===== ともる: 共通トークンとシェル、視聴画面 =====
+   デザインコンセプト「ステージ照明」。
+   画面の地は客席、配信ひとつひとつが照明の当たった舞台という見立て。
+   彩度の高い色は配信そのものが持つ色(--light / --stage-light)からしか出さず、
+   UIのハウスカラーは舞台照明のジェルを思わせる紫に固定する。 */
+
 :root {
-  --color-accent: #6441a5;
-  --color-border: #e0e0e0;
-  --color-video-bg: #18181b;
-  --header-height: 48px;
+  /* 面と線 */
+  --color-bg: #dde7f8;
+  --color-bg-elevated: #f0f5ff;
+  --color-bg-subtle: #d1def6;
+  --color-border: #c1d1ed;
+
+  /* 文字 */
+  --color-text: #0f1828;
+  --color-text-secondary: #4a5775;
+  --color-text-tertiary: #76849f;
+
+  /* ハウスカラー(操作可能なものだけに使う) */
+  --color-accent: #5b34d6;
+  --color-accent-rgb: 91, 52, 214;
+  --color-accent-alt: #7a5bea;
+  --color-accent-soft: #ede7ff;
+
+  /* 点灯を表す唯一の赤。LIVE表示以外には使わない */
+  --color-live: #e8334a;
+  --color-live-rgb: 232, 51, 74;
+
+  /* 舞台。ライトモードでも動画パネルは暗いままにする */
+  --color-video-bg: #0c1324;
+
+  --font-display: "Dela Gothic One", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-body: "Zen Kaku Gothic New", -apple-system, "Hiragino Kaku Gothic ProN", "Segoe UI",
+    sans-serif;
+  --font-mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  --header-height: 56px;
   --send-area-height: 108px;
+}
+
+:root[data-theme="dark"] {
+  --color-bg: #060d1f;
+  --color-bg-elevated: #0f1930;
+  --color-bg-subtle: #172541;
+  --color-border: #243657;
+
+  --color-text: #e8effd;
+  --color-text-secondary: #99abcc;
+  --color-text-tertiary: #6a7c9f;
+
+  --color-accent: #a88cff;
+  --color-accent-rgb: 168, 140, 255;
+  --color-accent-alt: #c4b1ff;
+  --color-accent-soft: #241d3d;
+
+  --color-live: #ff5068;
+  --color-live-rgb: 255, 80, 104;
+
+  --color-video-bg: #040814;
 }
 
 * {
@@ -12,24 +69,123 @@
 
 body {
   margin: 0;
-  font-family: -apple-system, "Hiragino Kaku Gothic ProN", "Segoe UI", sans-serif;
-  color: #1a1a1a;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
+/* キーボード操作時のフォーカスは全要素で必ず見えるようにする */
+:where(a, button, input, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ===== ヘッダー ===== */
+
 .app-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   height: var(--header-height);
-  padding: 0 16px;
+  padding: 0 20px;
+  background: color-mix(in srgb, var(--color-bg) 82%, transparent);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
   border-bottom: 1px solid var(--color-border);
-  background: #fff;
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+/* 視聴画面のワードマークは「配信一覧へ戻る」も兼ねるため矢印を足す */
+.wordmark-back {
+  margin-right: -2px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--color-text-tertiary);
+  transition: color 0.15s ease;
+}
+
+.wordmark:hover .wordmark-back,
+.wordmark:hover .wordmark-text {
+  color: var(--color-accent);
+}
+
+/* 点灯しているランプ。サービス名の「ともる」をそのまま図にしたもの */
+.wordmark-lamp {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--color-live);
+  box-shadow: 0 0 0 3px rgba(var(--color-live-rgb), 0.16), 0 0 12px rgba(var(--color-live-rgb), 0.8);
+  animation: lamp-pulse 2.6s ease-in-out infinite;
+}
+
+@keyframes lamp-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px rgba(var(--color-live-rgb), 0.16),
+      0 0 12px rgba(var(--color-live-rgb), 0.8);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(var(--color-live-rgb), 0.08),
+      0 0 18px rgba(var(--color-live-rgb), 0.45);
+  }
+}
+
+.wordmark-text {
+  font-family: var(--font-display);
+  font-size: 17px;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  transition: color 0.15s ease;
 }
 
 .app-header h1 {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
 }
+
+.theme-toggle-button {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.theme-toggle-button:hover {
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+}
+
+/* ===== 視聴画面のレイアウト ===== */
 
 .layout {
   display: flex;
@@ -39,40 +195,89 @@ body {
 
 .area-title {
   margin: 0;
-  padding: 10px 14px;
   font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  border-bottom: 1px solid var(--color-border);
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .video-area {
-  flex: 3 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: #fff;
+  gap: 14px;
+  padding: 22px 28px 40px;
+  overflow-y: auto;
 }
 
+/* 動画とその下の情報をひとつの舞台としてまとめる幅の枠 */
+.stage {
+  width: 100%;
+  max-width: 1040px;
+}
+
+.channel-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.channel-tab {
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.channel-tab:hover {
+  color: var(--color-text);
+  border-color: var(--color-text-tertiary);
+}
+
+.channel-tab.is-active {
+  color: #fff;
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+/* 舞台本体。ライト/ダークどちらでも暗い面のまま、
+   配信色(--stage-light)が下に漏れて照明に見えるようにする */
 .video-frame {
   position: relative;
-  flex: 0 0 auto;
   width: 100%;
-  max-width: 560px;
   aspect-ratio: 16 / 9;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+  color: #8a8894;
+  font-size: 13px;
   background: var(--color-video-bg);
-  color: #999;
-  font-size: 14px;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 26px 60px -22px rgba(var(--stage-light-rgb, 91, 52, 214), 0.75),
+    0 2px 6px rgba(0, 0, 0, 0.12);
 }
 
 .video-player {
   width: 100%;
   height: 100%;
+  display: block;
   background: var(--color-video-bg);
+}
+
+.video-loading-status {
+  position: absolute;
+  margin: 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .video-controls {
@@ -80,11 +285,12 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
+  z-index: 3;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 4px 10px 8px;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0));
+  gap: 2px;
+  padding: 24px 14px 12px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0));
 }
 
 .video-controls-row {
@@ -100,7 +306,7 @@ body {
 .seek-bar {
   display: flex;
   align-items: center;
-  padding: 6px 2px;
+  padding: 8px 2px;
   cursor: pointer;
   touch-action: none;
 }
@@ -110,7 +316,12 @@ body {
   width: 100%;
   height: 4px;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.24);
+  transition: height 0.12s ease;
+}
+
+.seek-bar:hover .seek-bar-track {
+  height: 6px;
 }
 
 .seek-bar-buffered {
@@ -120,51 +331,117 @@ body {
   left: 0;
   width: 0%;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.85);
 }
 
 .seek-bar-thumb {
   position: absolute;
   top: 50%;
   left: 0%;
-  width: 10px;
-  height: 10px;
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
   background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
   transform: translate(-50%, -50%);
 }
 
 .live-button {
   display: flex;
   align-items: center;
-  gap: 5px;
-  height: 24px;
-  padding: 0 10px;
+  gap: 6px;
+  height: 26px;
+  padding: 0 11px;
+  font-family: inherit;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.06em;
   color: #fff;
-  background: rgba(0, 0, 0, 0.5);
-  border: none;
-  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.13);
+  backdrop-filter: blur(10px) saturate(150%);
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
   cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.live-button:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+/* 配信端に追いついているときだけ赤く点灯させる */
+.live-button.is-live {
+  background: rgba(var(--color-live-rgb), 0.9);
+  border-color: rgba(255, 255, 255, 0.32);
 }
 
 .live-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: #888;
+  background: rgba(255, 255, 255, 0.45);
 }
 
 .live-dot.is-live {
-  background: #e33e3e;
+  background: #fff;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.9);
 }
 
 .elapsed-time {
+  font-family: var(--font-mono);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* 次のループ先頭までの残り時間。LIVEの赤と競合しないよう、
+   彩度を持たない控えめなガラスの札にとどめる。 */
+.loop-countdown {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 9px 0 7px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  cursor: default;
+}
+
+.loop-countdown-ring {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  /* 12時の位置から時計回りに満ちていく */
+  transform: rotate(-90deg);
+}
+
+.loop-countdown-ring-track,
+.loop-countdown-ring-value {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.loop-countdown-ring-track {
+  stroke: rgba(255, 255, 255, 0.22);
+}
+
+.loop-countdown-ring-value {
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-linecap: round;
+}
+
+.loop-countdown-label {
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.loop-countdown-time {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: #fff;
 }
 
 .gift-animation-layer {
@@ -215,11 +492,12 @@ body {
   z-index: 5;
   margin: 0;
   padding: 6px 8px;
+  font-family: var(--font-mono);
   font-size: 10px;
   line-height: 1.4;
   color: #0f0;
   background: rgba(0, 0, 0, 0.7);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   white-space: pre;
   pointer-events: none;
 }
@@ -231,93 +509,250 @@ body {
   width: 32px;
   height: 32px;
   padding: 0;
-  font-size: 15px;
-  line-height: 1;
   color: #fff;
-  background: rgba(0, 0, 0, 0.5);
-  border: none;
-  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.13);
+  backdrop-filter: blur(10px) saturate(150%);
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
   cursor: pointer;
+  transition: background-color 0.15s ease;
 }
 
 .video-control-btn:hover {
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(255, 255, 255, 0.26);
 }
 
 .video-control-icon {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
+}
+
+/* ===== 配信情報 ===== */
+
+.watch-title {
+  margin: 18px 0 14px;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
 }
 
 .stream-meta {
-  flex: 0 0 auto;
-  align-self: stretch;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 14px;
-  background: #fff;
+  padding-top: 16px;
   border-top: 1px solid var(--color-border);
 }
 
 .streamer-icon {
   flex: 0 0 auto;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  background: #e0e0e0;
   overflow: hidden;
+  background: var(--color-bg-subtle);
+  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 3px var(--color-border);
 }
 
 .streamer-icon-img {
   width: 100%;
   height: 100%;
-  border-radius: 50%;
   display: block;
 }
 
+/* 枠で囲うのをやめ、文字の大きさと色だけで階層をつける */
 .stream-title-box {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 8px 10px;
-  font-size: 13px;
-  color: #666;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
+  gap: 1px;
 }
 
 .streamer-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1a1a1a;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
 }
 
 .streamer-label {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.stream-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+
+.stream-tag-badge {
+  padding: 2px 9px;
   font-size: 11px;
-  color: #888;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-subtle);
+  border-radius: 999px;
+  white-space: nowrap;
 }
 
 .viewer-count-box {
   flex: 0 0 auto;
-  padding: 8px 10px;
-  font-size: 12px;
-  color: #666;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
+  display: flex;
+  align-items: baseline;
+  font-size: 13px;
+  color: var(--color-text-secondary);
   white-space: nowrap;
 }
 
+.viewer-count-number {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.viewer-count-box::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  align-self: center;
+  border-radius: 50%;
+  background: var(--color-live);
+}
+
+.follow-toggle-button {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.follow-toggle-button:hover {
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+}
+
+.follow-toggle-button.is-following {
+  color: #fff;
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.follow-toggle-button.is-following:hover {
+  background: var(--color-accent-alt);
+  border-color: var(--color-accent-alt);
+}
+
+.follow-toggle-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.like-button-wrap {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.like-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  font-size: 17px;
+  line-height: 1;
+  color: var(--color-live);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.like-button:hover {
+  background: rgba(var(--color-live-rgb), 0.08);
+  border-color: var(--color-live);
+}
+
+.like-button.is-liked {
+  animation: like-button-pop 0.35s ease-out;
+}
+
+@keyframes like-button-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.3);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.like-count {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.like-particle-layer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 0;
+  pointer-events: none;
+}
+
+.like-particle {
+  position: absolute;
+  left: 12px;
+  bottom: 0;
+  font-size: 14px;
+  animation: like-particle-float 900ms ease-out forwards;
+}
+
+@keyframes like-particle-float {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--drift, 6px), -42px) scale(1.1);
+  }
+}
+
+/* ===== コメント欄 ===== */
+
 .side-area {
-  flex: 0 0 340px;
+  flex: 0 0 356px;
   min-width: 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
   border-left: 1px solid var(--color-border);
-  background: #fff;
+  background: var(--color-bg-elevated);
 }
 
 .comment-area {
@@ -328,42 +763,64 @@ body {
   flex-direction: column;
 }
 
-.comment-area .area-title {
-  color: #333;
+.comment-panel-head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.comment-count {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-tertiary);
 }
 
 .comment-list {
   margin: 0;
-  padding: 6px 14px;
+  padding: 10px 12px;
   list-style: none;
   overflow-y: auto;
   flex: 1 1 auto;
 }
 
+/* 罫線ではなく余白と背景で切る。ギフト付きだけが色を持つ */
 .comment-item {
-  padding: 6px 8px;
+  padding: 7px 10px;
   font-size: 13px;
-  line-height: 1.5;
-  border-bottom: 1px solid #f2f2f2;
-  border-radius: 6px;
+  line-height: 1.55;
+  color: var(--color-text);
+  border-radius: var(--radius-md);
   background-color: var(--item-bg-color, transparent);
-  box-shadow: 0 0 0 0 rgba(255, 200, 60, 0);
+  box-shadow: 0 0 0 0 rgba(var(--color-accent-rgb), 0);
   transition: box-shadow 1.2s ease;
-  animation: comment-item-enter 0.3s ease-out;
+  animation: comment-item-enter 0.28s ease-out;
 }
 
-.comment-item:last-child {
-  border-bottom: none;
+/* ギフト付きコメントは淡いパステル地になるため、
+   ダークモードでも文字は暗いまま固定してコントラストを保つ */
+.comment-item--gift {
+  color: #16151c;
 }
 
 .comment-item.is-new {
-  box-shadow: 0 0 0 3px rgba(255, 190, 40, 0.6);
+  box-shadow: 0 0 0 2px var(--color-accent);
+}
+
+/* コメントが0件のときは空の誘い(.comment-empty)に高さを譲る */
+.comment-list:empty {
+  flex: 0 0 auto;
+  padding: 0;
 }
 
 @keyframes comment-item-enter {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -374,7 +831,7 @@ body {
 .comment-user {
   display: inline-block;
   margin-right: 6px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--color-accent);
 }
 
@@ -383,8 +840,36 @@ body {
   height: 18px;
   margin-right: 4px;
   vertical-align: middle;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
+
+/* 空のコメント欄は「何もない状態」ではなく、書き込みへの誘いにする */
+.comment-empty {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 24px;
+  text-align: center;
+}
+
+.comment-empty-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.comment-empty-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-tertiary);
+}
+
+/* ===== 送信エリア ===== */
 
 .send-area {
   flex: 0 0 auto;
@@ -392,9 +877,9 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 6px;
-  padding: 10px 14px;
-  background: #fafafa;
+  gap: 8px;
+  padding: 12px 16px 14px;
+  background: var(--color-bg-subtle);
   border-top: 1px solid var(--color-border);
 }
 
@@ -412,10 +897,11 @@ body {
   gap: 6px;
   flex: 1 1 auto;
   min-width: 0;
-  padding: 5px 10px;
+  padding: 5px 12px;
   font-size: 12px;
-  color: var(--item-color, #333);
-  background: rgba(var(--item-color-rgb, 100, 65, 165), 0.12);
+  font-weight: 500;
+  color: var(--item-color, var(--color-text));
+  background: rgba(var(--item-color-rgb, var(--color-accent-rgb)), 0.14);
   border: 1px solid var(--item-color, var(--color-border));
   border-radius: 999px;
 }
@@ -439,20 +925,46 @@ body {
   text-overflow: ellipsis;
 }
 
+/* ギフト着弾演出。fixed配置なのでコメント一覧のスクロール枠に切り取られない。
+   レイヤー自体は面積を持たせず、万一スタイル適用前でも操作を遮らないようにする */
+.gift-bubble-layer {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+
+/* left/topは飛行開始位置の中心座標。実際の移動はWeb Animations APIで与える */
+.gift-bubble {
+  position: fixed;
+  width: 28px;
+  height: 28px;
+  pointer-events: none;
+  object-fit: contain;
+  border-radius: 6px;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.25));
+  will-change: transform, opacity;
+}
+
 .gift-button {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
+  font-family: inherit;
   font-size: 13px;
   font-weight: 700;
-  color: #fff;
-  background: linear-gradient(135deg, #a855f7, #7c3aed);
-  border: none;
+  color: var(--color-accent);
+  background: transparent;
+  border: 1px solid var(--color-accent);
   border-radius: 999px;
   cursor: pointer;
-  transition: filter 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  transition: color 0.15s ease, background-color 0.15s ease;
 }
 
 .gift-button-icon {
@@ -460,15 +972,10 @@ body {
   line-height: 1;
 }
 
-.gift-button:hover {
-  filter: brightness(1.1);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 10px rgba(124, 58, 237, 0.35);
-}
-
+.gift-button:hover,
 .gift-button.is-open {
-  background: linear-gradient(135deg, #9333ea, #6d28d9);
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.5);
+  color: #fff;
+  background: var(--color-accent);
 }
 
 /* ギフトパネル: コメント欄(.comment-area)いっぱいに重ねる内部オーバーレイ。
@@ -477,7 +984,7 @@ body {
   position: absolute;
   inset: 0;
   z-index: 5;
-  background: rgba(15, 15, 20, 0.45);
+  background: rgba(5, 11, 26, 0.5);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease-out;
@@ -510,11 +1017,16 @@ body {
   flex-direction: column;
   min-height: 0;
   flex: 1 1 auto;
-  pointer-events: auto;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.3);
   overflow: hidden;
+}
+
+.item-panel-body.is-open .item-panel-inner {
+  pointer-events: auto;
 }
 
 .item-panel-header {
@@ -522,13 +1034,14 @@ body {
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--color-border);
 }
 
 .item-panel-title {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--color-text);
 }
 
 .item-panel-close {
@@ -539,23 +1052,23 @@ body {
   height: 26px;
   padding: 0;
   font-size: 13px;
-  color: #666;
+  color: var(--color-text-secondary);
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 
 .item-panel-close:hover {
-  color: #1a1a1a;
-  background: #f0f0f0;
+  color: var(--color-text);
+  background: var(--color-bg-subtle);
 }
 
 .item-panel-content {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: 10px;
+  padding: 12px;
 }
 
 .item-choice-list {
@@ -570,36 +1083,41 @@ body {
   align-items: center;
   justify-content: flex-start;
   width: 100%;
-  gap: 6px;
-  padding: 8px 6px;
+  gap: 7px;
+  padding: 10px 6px;
+  font-family: inherit;
   font-size: 11px;
-  color: #333;
+  color: var(--color-text-secondary);
   text-align: center;
-  background: #fff;
+  background: transparent;
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease,
     background-color 0.15s ease;
 }
 
+/* ホバー時もアイテム固有の色を出し、コメント行の背景色と対応させる */
 .item-choice:hover {
+  color: var(--item-color, var(--color-accent));
+  background: rgba(var(--item-color-rgb, var(--color-accent-rgb)), 0.08);
   border-color: var(--item-color, var(--color-accent));
   transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(var(--item-color-rgb, 100, 65, 165), 0.35);
+  box-shadow: 0 6px 14px -4px rgba(var(--item-color-rgb, var(--color-accent-rgb)), 0.5);
 }
 
 .item-choice.is-selected {
   color: var(--item-color, var(--color-accent));
-  background: rgba(var(--item-color-rgb, 100, 65, 165), 0.14);
+  background: rgba(var(--item-color-rgb, var(--color-accent-rgb)), 0.12);
   border-color: var(--item-color, var(--color-accent));
-  box-shadow: 0 0 0 1px var(--item-color, var(--color-accent));
+  box-shadow: 0 0 0 1px var(--item-color, var(--color-accent)),
+    0 8px 20px -6px rgba(var(--item-color-rgb, var(--color-accent-rgb)), 0.6);
 }
 
 .item-choice-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
   object-fit: cover;
   flex: 0 0 auto;
   border: 2px solid var(--item-color, var(--color-border));
@@ -613,7 +1131,7 @@ body {
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
-  line-height: 1.3;
+  line-height: 1.35;
   word-break: break-word;
   text-overflow: ellipsis;
 }
@@ -621,85 +1139,113 @@ body {
 .item-status {
   margin: 0;
   font-size: 12px;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .item-status.is-error {
-  color: #d32f2f;
+  color: var(--color-live);
 }
 
 .item-retry-button {
-  margin-top: 6px;
-  padding: 4px 10px;
+  margin-top: 8px;
+  padding: 5px 12px;
+  font-family: inherit;
   font-size: 12px;
-  color: #333;
-  background: #fff;
+  color: var(--color-text);
+  background: transparent;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
+}
+
+.item-retry-button:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
 }
 
 .comment-row {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 8px;
 }
 
 .comment-input {
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 36px;
-  padding: 8px 10px;
+  min-height: 38px;
+  padding: 9px 12px;
   font-size: 13px;
   font-family: inherit;
-  line-height: 1.4;
+  line-height: 1.45;
+  color: var(--color-text);
+  background: var(--color-bg-elevated);
   resize: none;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
+}
+
+.comment-input::placeholder {
+  color: var(--color-text-tertiary);
 }
 
 .comment-input:focus {
   outline: none;
   border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(var(--color-accent-rgb), 0.16);
+}
+
+.comment-input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
 }
 
 .send-button {
-  align-self: flex-end;
-  height: 36px;
-  padding: 0 14px;
+  flex: 0 0 auto;
+  height: 38px;
+  padding: 0 18px;
+  font-family: inherit;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   color: #fff;
   background: var(--color-accent);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   white-space: nowrap;
+  transition: background-color 0.15s ease;
+}
+
+.send-button:hover:not(:disabled) {
+  background: var(--color-accent-alt);
 }
 
 .send-button:disabled {
-  opacity: 0.5;
+  color: var(--color-text-tertiary);
+  background: var(--color-border);
   cursor: not-allowed;
 }
 
 .comment-meta-row {
   display: flex;
   justify-content: flex-end;
+  min-height: 16px;
 }
 
 .char-counter {
+  font-family: var(--font-mono);
   font-size: 11px;
-  color: #888;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-tertiary);
 }
 
 .char-counter.is-over {
-  color: #d32f2f;
+  color: var(--color-live);
 }
 
 .comment-error {
   margin: 0;
   font-size: 12px;
-  color: #d32f2f;
+  color: var(--color-live);
 }
 
 /* タブレット以下: 動画を上、コメント欄を下に積む */
@@ -713,33 +1259,96 @@ body {
   .video-area {
     flex: 0 0 auto;
     width: 100%;
-    aspect-ratio: 16 / 9;
-  }
-
-  .video-frame {
-    max-width: 100%;
+    padding: 14px 16px 24px;
+    overflow: visible;
   }
 
   .side-area {
     flex: 1 1 auto;
-    min-height: 320px;
+    min-height: 360px;
     border-left: none;
     border-top: 1px solid var(--color-border);
   }
+
+  .watch-title {
+    font-size: 18px;
+    margin: 14px 0 12px;
+  }
 }
 
-/* スマホ: 余白や文字サイズを詰める */
+/* スマホ: 余白と文字を詰め、タップしやすいサイズに調整する */
 @media (max-width: 480px) {
   .app-header {
-    padding: 0 12px;
+    padding: 0 14px;
   }
 
-  .area-title {
-    padding: 8px 12px;
+  .video-area {
+    padding: 10px 12px 20px;
+  }
+
+  .video-frame {
+    border-radius: var(--radius-md);
+  }
+
+  .watch-title {
+    font-size: 16px;
   }
 
   .send-area {
-    padding: 8px 10px;
-    gap: 6px;
+    padding: 10px 12px;
+  }
+
+  /* 配信者名・フォロー・いいね・視聴者数が横並びで収まりきらないため2段に折り返す */
+  .stream-meta {
+    flex-wrap: wrap;
+    row-gap: 12px;
+  }
+
+  .stream-title-box {
+    flex-basis: calc(100% - 56px);
+  }
+
+  .follow-toggle-button {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .video-control-btn {
+    width: 38px;
+    height: 38px;
+  }
+
+  .live-button {
+    height: 30px;
+    padding: 0 13px;
+  }
+
+  /* 狭い画面では操作列が詰まるので、見出し語を落として残り時間だけ残す */
+  .loop-countdown-label {
+    display: none;
+  }
+
+  .comment-input {
+    min-height: 42px;
+  }
+
+  .send-button {
+    height: 42px;
+  }
+
+  .item-choice-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* 動きを減らす設定を尊重する。演出は消えても情報は変わらないようにしてある */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

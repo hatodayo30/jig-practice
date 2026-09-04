@@ -1,0 +1,345 @@
+/* ===== ホーム画面 =====
+   カードの箱枠は持たせない。サムネイルとテキストだけを置き、
+   配信色(--light)がサムネの下に光として漏れることで
+   「照明の当たった舞台が並んでいる」ように見せる。 */
+
+.home-main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 28px 72px;
+}
+
+.stream-section + .stream-section {
+  margin-top: 52px;
+}
+
+.stream-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.stream-section-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+
+.stream-section-count {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-tertiary);
+}
+
+/* カテゴリ絞り込み。配信データのcategoryから作るので、
+   選んで0件になる組み合わせは出ない */
+.category-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 20px;
+}
+
+.category-chip {
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.category-chip:hover {
+  color: var(--color-text);
+  border-color: var(--color-text-tertiary);
+}
+
+.category-chip.is-active {
+  color: #fff;
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.stream-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(228px, 1fr));
+  gap: 34px 20px;
+}
+
+/* おすすめは常に3列。一覧より1枚を大きく取ることで役割の違いを面積で示す */
+@media (min-width: 900px) {
+  .stream-grid--recommended {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.stream-grid--recommended .stream-card-title {
+  font-size: 16px;
+}
+
+.stream-grid--recommended .stream-card-initial {
+  top: -24px;
+  font-size: 112px;
+}
+
+.stream-card {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  color: inherit;
+  text-decoration: none;
+  animation: stream-card-in 0.45s ease-out backwards;
+  animation-delay: calc(var(--i, 0) * 55ms);
+}
+
+@keyframes stream-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 舞台。box-shadowが配信色の照明の漏れになっている */
+.stream-card-thumbnail {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 14px;
+  box-shadow: 0 16px 32px -14px rgba(var(--light-rgb), 0.7);
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+/* 上から当たるスポットライト */
+.stream-card-thumbnail::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(115% 75% at 50% -15%, rgba(255, 255, 255, 0.3), transparent 62%);
+}
+
+.stream-card:hover .stream-card-thumbnail,
+.stream-card:focus-visible .stream-card-thumbnail {
+  transform: translateY(-5px);
+  box-shadow: 0 26px 46px -14px rgba(var(--light-rgb), 0.95);
+}
+
+/* 配信者名の頭文字を舞台の背景美術として大きく置き、角から見切れさせる */
+.stream-card-initial {
+  position: absolute;
+  top: -18px;
+  right: -4px;
+  font-family: var(--font-display);
+  font-size: 88px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.86);
+  user-select: none;
+}
+
+
+.stream-card-live-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #fff;
+  background: rgba(5, 11, 26, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 999px;
+}
+
+.stream-card-live-badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-live);
+  box-shadow: 0 0 7px rgba(var(--color-live-rgb), 0.95);
+}
+
+.stream-card-viewer-badge {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 2;
+  padding: 3px 9px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  background: rgba(5, 11, 26, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 999px;
+}
+
+.stream-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.stream-card-title {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+
+.stream-card:hover .stream-card-title {
+  color: var(--color-accent);
+}
+
+.stream-card-meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.stream-card-streamer {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.stream-card-category::before {
+  content: "·";
+  margin-right: 6px;
+}
+
+.stream-grid-status {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 28px 0;
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+}
+
+/* ===== 同時視聴中のチャンネル =====
+   配信カードのような「舞台」ではなく、番組表の一行として淡々と並べる。
+   主役はサムネではなく尺(ループ周期)なので、色は持たせず罫線だけで区切る。 */
+
+.loop-channel-note {
+  margin: -8px 0 16px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--color-text-tertiary);
+}
+
+.loop-channel-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--color-border);
+}
+
+.loop-channel-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 4px;
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid var(--color-border);
+  transition: color 0.15s ease, padding-left 0.15s ease;
+}
+
+.loop-channel-item:hover {
+  color: var(--color-accent);
+  padding-left: 10px;
+}
+
+.loop-channel-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loop-channel-badge {
+  flex: none;
+  padding: 3px 10px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-subtle);
+  border-radius: 999px;
+}
+
+.loop-channel-duration {
+  flex: none;
+  width: 42px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-tertiary);
+}
+
+@media (max-width: 640px) {
+  .home-main {
+    padding: 20px 16px 48px;
+  }
+
+  /* 幅が足りないときはバッジ(ループ周期)を優先し、正確な尺のほうを落とす */
+  .loop-channel-duration {
+    display: none;
+  }
+
+  .stream-section + .stream-section {
+    margin-top: 40px;
+  }
+
+  .stream-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 26px 12px;
+  }
+
+  .stream-grid--recommended {
+    grid-template-columns: 1fr;
+  }
+
+  .stream-card-initial {
+    font-size: 68px;
+    top: -12px;
+  }
+
+  .stream-grid--recommended .stream-card-initial {
+    font-size: 68px;
+    top: -12px;
+  }
+
+  .stream-grid--recommended .stream-card-title {
+    font-size: 14px;
+  }
+}

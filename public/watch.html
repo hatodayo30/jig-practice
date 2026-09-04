@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ともる</title>
+    <title>視聴中 - ともる</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -11,13 +11,13 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/styles.css" />
-    <link rel="stylesheet" href="/home.css" />
     <script type="module" src="/theme.ts"></script>
-    <script type="module" src="/home.tsx"></script>
+    <script type="module" src="/watch.tsx"></script>
   </head>
   <body>
     <header class="app-header">
-      <a class="wordmark" href="/index.html">
+      <a class="wordmark" href="/index.html" aria-label="配信一覧に戻る">
+        <span class="wordmark-back" aria-hidden="true">←</span>
         <span class="wordmark-lamp" aria-hidden="true"></span>
         <span class="wordmark-text">ともる</span>
       </a>
