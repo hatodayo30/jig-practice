@@ -74,20 +74,69 @@
   gap: 34px 20px;
 }
 
-/* おすすめは常に3列。一覧より1枚を大きく取ることで役割の違いを面積で示す */
-@media (min-width: 900px) {
-  .stream-grid--recommended {
-    grid-template-columns: repeat(3, 1fr);
-  }
+/* カテゴリ「すべて」選択時、配信一覧をカテゴリごとの小節に分けて並べる */
+.stream-group + .stream-group {
+  margin-top: 36px;
 }
 
-.stream-grid--recommended .stream-card-title {
-  font-size: 16px;
+.stream-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin-bottom: 16px;
 }
 
-.stream-grid--recommended .stream-card-initial {
-  top: -24px;
-  font-size: 112px;
+.stream-group-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.stream-group-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-tertiary);
+}
+
+/* ===== おすすめ配信:自動で流れ続けるティッカー(マーキー) =====
+   カード群を複製して2セット以上並べ、その複製の継ぎ目が画面外に出た瞬間
+   ちょうど元の位置に戻るような距離だけtranslateXし続けることで、
+   途切れなく等速に流れているように見せる。距離とセット数はカードの
+   実測サイズから動的に計算するため、枚数が変わっても隙間や継ぎ目が出ない。
+   位置の更新自体はJS側(rAF)がtransformを直接書き換えて行っており、
+   自動送りとポインタードラッグを同じtranslateXの上で両立させている。 */
+.stream-marquee {
+  overflow: hidden;
+  cursor: grab;
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.stream-marquee[data-dragging="true"] {
+  cursor: grabbing;
+}
+
+.stream-marquee-track {
+  display: flex;
+  gap: 20px;
+  width: max-content;
+  will-change: transform;
+}
+
+.stream-marquee-set {
+  display: flex;
+  flex: none;
+  gap: 20px;
+}
+
+.stream-marquee-track .stream-card {
+  flex: 0 0 260px;
+  width: 260px;
+  -webkit-user-drag: none;
+  /* 流れ続ける演出と入場アニメーションが噛み合わないため個別カードの登場演出は無効化 */
+  animation: none;
 }
 
 .stream-card {
@@ -194,9 +243,16 @@
 }
 
 .stream-card-body {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
+  padding: 28px 12px 10px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent);
 }
 
 .stream-card-title {
@@ -206,11 +262,11 @@
   font-size: 14px;
   font-weight: 700;
   line-height: 1.45;
+  color: #fff;
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
 }
-
 
 .stream-card:hover .stream-card-title {
   color: var(--color-accent);
@@ -222,12 +278,12 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  color: var(--color-text-tertiary);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .stream-card-streamer {
-  color: var(--color-text-secondary);
+  color: rgba(255, 255, 255, 0.9);
   font-weight: 500;
 }
 
@@ -244,76 +300,293 @@
   color: var(--color-text-tertiary);
 }
 
-/* ===== 同時視聴中のチャンネル =====
-   配信カードのような「舞台」ではなく、番組表の一行として淡々と並べる。
-   主役はサムネではなく尺(ループ周期)なので、色は持たせず罫線だけで区切る。 */
+/* ===== 視聴数ランキング =====
+   ジャンル別の表示は「配信一覧」のジャンルタブと役割が重複するため持たせず、
+   チャンネルの視聴数(紐づく配信のviewerCount)だけを見せる軽量なリスト。 */
 
-.loop-channel-note {
-  margin: -8px 0 16px;
-  font-size: 12px;
-  line-height: 1.7;
-  color: var(--color-text-tertiary);
-}
-
-.loop-channel-list {
+.channel-ranking {
   margin: 0;
   padding: 0;
   list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  column-gap: 28px;
   border-top: 1px solid var(--color-border);
 }
 
-.loop-channel-item {
+.channel-ranking-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 13px 4px;
+  gap: 10px;
+  padding: 10px 4px;
   color: inherit;
   text-decoration: none;
   border-bottom: 1px solid var(--color-border);
-  transition: color 0.15s ease, padding-left 0.15s ease;
+  transition: color 0.15s ease;
 }
 
-.loop-channel-item:hover {
+.channel-ranking-item:hover {
   color: var(--color-accent);
-  padding-left: 10px;
 }
 
-.loop-channel-title {
+.channel-ranking-rank {
+  flex: none;
+  width: 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.channel-ranking-title {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 14px;
+  font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.loop-channel-badge {
+.channel-ranking-viewers {
   flex: none;
-  padding: 3px 10px;
-  font-size: 11px;
-  color: var(--color-text-secondary);
-  background: var(--color-bg-subtle);
-  border-radius: 999px;
-}
-
-.loop-channel-duration {
-  flex: none;
-  width: 42px;
-  text-align: right;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: var(--color-text-tertiary);
+}
+
+/* ===== 今日の1本(ルーレット演出) =====
+   「サイコロを振る」でリール(.roulette-track)がtranslateXで横に流れ、
+   減速しながら中央のポインター位置でぴたりと止まる。当選するカードは
+   演出開始時点で先に確定しており、見た目はそこへ向けて動くだけ。 */
+
+.roulette-note {
+  margin: -8px 0 26px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--color-text-tertiary);
+}
+
+/* リール・ボタン・結果表示をまとめてページ背景より明るい1枚のパネルにする。
+   結果表示の白文字・黄文字はこの暗いパネルの上で読める配色のため、パネルの
+   外に出さないこと。 */
+.roulette-panel {
+  background: #12142a;
+  border-radius: 20px;
+  padding: 28px 20px;
+  text-align: center;
+}
+
+.roulette-frame {
+  position: relative;
+  overflow: hidden;
+  padding: 6px 0;
+  margin-bottom: 28px;
+  /* 両端のカードが奥に回り込んで見えるように立体空間を持たせる */
+  perspective: 1000px;
+}
+
+.roulette-frame::before,
+.roulette-frame::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 64px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.roulette-frame::before {
+  left: 0;
+  background: linear-gradient(to right, #12142a, transparent);
+}
+
+.roulette-frame::after {
+  right: 0;
+  background: linear-gradient(to left, #12142a, transparent);
+}
+
+.roulette-pointer {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  z-index: 3;
+}
+
+.roulette-pointer-top {
+  top: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 9px solid #6c5ce7;
+}
+
+.roulette-pointer-bottom {
+  bottom: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 9px solid #6c5ce7;
+}
+
+.roulette-track {
+  display: flex;
+  gap: 20px;
+  width: max-content;
+  will-change: transform, filter;
+}
+
+.roulette-track .stream-card {
+  flex: 0 0 220px;
+  width: 220px;
+  animation: none;
+}
+
+.roulette-card {
+  /* 中央からの距離に応じたtranslateZ/rotateYの奥行きをJS側から毎フレーム適用する */
+  transform-style: preserve-3d;
+  will-change: transform, opacity, filter;
+}
+
+.roulette-card.is-landed .stream-card-thumbnail {
+  box-shadow: 0 0 0 3px #6c5ce7, 0 18px 34px -12px rgba(108, 92, 231, 0.85);
+}
+
+.roulette-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 30px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  background: #6c5ce7;
+  border: none;
+  border-radius: 30px;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(108, 92, 231, 0.4);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.roulette-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: #7c6cf3;
+}
+
+.roulette-button:disabled {
+  cursor: default;
+}
+
+.roulette-button-icon {
+  display: inline-block;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.roulette-button-icon.is-spinning {
+  animation: roulette-icon-spin 0.4s linear infinite;
+}
+
+@keyframes roulette-icon-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.roulette-result {
+  margin-top: 28px;
+  text-align: center;
+}
+
+.roulette-result-label {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: #f2c94c;
+}
+
+.roulette-result-title {
+  margin: 0 0 4px;
+  font-size: 19px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.roulette-result-meta {
+  margin: 0 0 16px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #9aa0c0;
+}
+
+.roulette-result-streamer {
+  color: inherit;
+  font-weight: 600;
+}
+
+.roulette-result-meta > * + *::before {
+  content: "·";
+  margin-right: 6px;
+}
+
+.roulette-result-cta {
+  display: inline-block;
+  padding: 10px 26px;
+  line-height: 1.2;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0c0e1c;
+  background: #fff;
+  border-radius: 24px;
+  text-decoration: none;
+  transition: transform 0.15s ease;
+}
+
+.roulette-result-cta:hover {
+  transform: translateY(-2px);
+}
+
+.confetti-burst {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: -10px;
+  width: 7px;
+  height: 12px;
+  background: hsl(var(--confetti-hue) 85% 60%);
+  transform: rotate(var(--confetti-rotate));
+  animation: confetti-fall var(--confetti-duration) ease-in var(--confetti-delay) 1 both;
+}
+
+@keyframes confetti-fall {
+  from {
+    transform: translate(0, -10px) rotate(0deg);
+    opacity: 1;
+  }
+  to {
+    transform: translate(var(--confetti-drift), 220px) rotate(var(--confetti-rotate));
+    opacity: 0;
+  }
 }
 
 @media (max-width: 640px) {
   .home-main {
     padding: 20px 16px 48px;
-  }
-
-  /* 幅が足りないときはバッジ(ループ周期)を優先し、正確な尺のほうを落とす */
-  .loop-channel-duration {
-    display: none;
   }
 
   .stream-section + .stream-section {
@@ -325,8 +598,10 @@
     gap: 26px 12px;
   }
 
-  .stream-grid--recommended {
-    grid-template-columns: 1fr;
+  .stream-marquee-track .stream-card,
+  .roulette-track .stream-card {
+    flex-basis: 220px;
+    width: 220px;
   }
 
   .stream-card-initial {
@@ -334,12 +609,8 @@
     top: -12px;
   }
 
-  .stream-grid--recommended .stream-card-initial {
-    font-size: 68px;
-    top: -12px;
-  }
-
-  .stream-grid--recommended .stream-card-title {
-    font-size: 14px;
+  .roulette-frame::before,
+  .roulette-frame::after {
+    width: 32px;
   }
 }

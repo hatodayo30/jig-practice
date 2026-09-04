@@ -4,8 +4,13 @@
 export interface Channel {
   id: string;
   title: string;
+  category: string;
   playlist: string;
   default: boolean;
+  retired: boolean;
+  attribution: string;
+  license: string;
+  source: string;
 }
 
 const HLS_SERVER_BASE = "https://intern-hls-server.tomaton.workers.dev";

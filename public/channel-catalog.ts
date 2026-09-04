@@ -3,7 +3,8 @@
 // HLSサーバーの各チャンネルは固定尺の動画をループ配信しているため、
 // 同じチャンネルを見ている視聴者には常に同じ瞬間の映像が流れる。
 // その同期性を画面上で見せるために尺の情報が要るが、サーバーの
-// /channels.json は現状404を返し尺も含まないため、ここをモックの真実源とする。
+// /channels.json はタイトルやカテゴリは返すもののループ尺までは含まないため、
+// 尺情報だけはここで補完する(値はBlender作品の公開されている実尺)。
 //
 // 通信を担う channels-data.ts とは意図的に分けている。あちらはサーバーが返す
 // チャンネル一覧そのもの、こちらはサーバーに存在しない付加情報のカタログ。
@@ -11,14 +12,30 @@
 export interface ChannelCatalogEntry {
   id: string;
   title: string;
+  category: string;
   /** 1ループの長さ(秒)。この周期で先頭に巻き戻る。 */
   durationSeconds: number;
 }
 
 const CHANNEL_CATALOG: ChannelCatalogEntry[] = [
-  { id: "llamigos", title: "Caminandes 3: Llamigos", durationSeconds: 150 },
-  { id: "llama-drama", title: "Caminandes 1: Llama Drama", durationSeconds: 90 },
-  { id: "gran-dillama", title: "Caminandes 2: Gran Dillama", durationSeconds: 146 },
+  { id: "big-buck-bunny", title: "Big Buck Bunny", category: "コメディ", durationSeconds: 596 },
+  { id: "coffee-run", title: "Coffee Run", category: "ドラマ", durationSeconds: 185 },
+  {
+    id: "cosmos-laundromat",
+    title: "Cosmos Laundromat: First Cycle",
+    category: "ファンタジー",
+    durationSeconds: 731,
+  },
+  { id: "elephants-dream", title: "Elephants Dream", category: "SF", durationSeconds: 654 },
+  { id: "glass-half", title: "Glass Half", category: "コメディ", durationSeconds: 193 },
+  { id: "gran-dillama", title: "Caminandes 2: Gran Dillama", category: "コメディ", durationSeconds: 146 },
+  { id: "llama-drama", title: "Caminandes 1: Llama Drama", category: "コメディ", durationSeconds: 90 },
+  { id: "llamigos", title: "Caminandes 3: Llamigos", category: "コメディ", durationSeconds: 150 },
+  { id: "singularity", title: "SINGULARITY", category: "SF", durationSeconds: 391 },
+  { id: "sintel", title: "Sintel", category: "ファンタジー", durationSeconds: 888 },
+  { id: "spring", title: "Spring", category: "ファンタジー", durationSeconds: 464 },
+  { id: "tears-of-steel", title: "Tears of Steel", category: "SF", durationSeconds: 734 },
+  { id: "wing-it", title: "Wing It!", category: "コメディ", durationSeconds: 238 },
 ];
 
 // チャンネル未指定(= /stream.m3u8 で再生している)ときにループ表示が拠り所にするid。
@@ -54,10 +71,4 @@ export function formatLoopDuration(seconds: number): string {
   const m = Math.floor(total / 60);
   const s = total % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
-}
-
-// バッジ用のざっくりした分数。1:30を「約2分」と切り上げて見せると実感とずれるため、
-// 端数がちょうど30秒のときは短い側に倒す(1秒引いてから四捨五入する)。
-export function roundedLoopMinutes(seconds: number): number {
-  return Math.max(1, Math.round((seconds - 1) / 60));
 }
