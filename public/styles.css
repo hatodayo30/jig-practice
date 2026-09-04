@@ -217,35 +217,123 @@ body {
   max-width: 1040px;
 }
 
-.channel-tabs {
+/* ===== おすすめ配信(視聴画面の左サイド) ===== */
+
+.recommended-area {
+  flex: 0 0 248px;
+  min-width: 0;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 12px;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 14px;
+  overflow-y: auto;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
 }
 
-.channel-tab {
-  padding: 6px 14px;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  background: transparent;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  cursor: pointer;
-  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+.recommended-area-title {
+  margin: 0 2px 2px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
-.channel-tab:hover {
-  color: var(--color-text);
-  border-color: var(--color-text-tertiary);
+.recommended-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.channel-tab.is-active {
+.recommended-item {
+  display: flex;
+  gap: 10px;
+  padding: 6px;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--radius-md);
+  transition: background-color 0.15s ease;
+}
+
+.recommended-item:hover,
+.recommended-item:focus-visible {
+  background: var(--color-bg-subtle);
+}
+
+.recommended-item-thumbnail {
+  position: relative;
+  flex: 0 0 104px;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+}
+
+.recommended-item-initial {
+  font-family: var(--font-display);
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.recommended-item-live-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  padding: 1px 5px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   color: #fff;
-  background: var(--color-accent);
-  border-color: var(--color-accent);
+  background: var(--color-live);
+  border-radius: 3px;
+}
+
+.recommended-item-viewer-badge {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  padding: 1px 5px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 3px;
+}
+
+.recommended-item-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recommended-item-title {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.recommended-item-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+.recommended-item-streamer {
+  color: var(--color-text-secondary);
 }
 
 /* 舞台本体。ライト/ダークどちらでも暗い面のまま、
@@ -483,6 +571,49 @@ body {
     opacity: 1;
     transform: scale(1);
   }
+}
+
+/* 全画面表示中、サイドバーのコメント欄が描画されなくなる代わりに
+   舞台右下へ小さく重ねる簡易コメント一覧(表示専用) */
+.fullscreen-comment-overlay {
+  position: absolute;
+  right: 14px;
+  bottom: 92px;
+  z-index: 4;
+  width: 240px;
+  max-height: 220px;
+  display: flex;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px) saturate(150%);
+  -webkit-backdrop-filter: blur(8px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: var(--radius-md);
+}
+
+.fullscreen-comment-list {
+  margin: 0;
+  padding: 8px 10px;
+  list-style: none;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+}
+
+.fullscreen-comment-item {
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.92);
+  word-break: break-word;
+}
+
+.fullscreen-comment-item-icon {
+  width: 14px;
+  height: 14px;
+  margin-right: 3px;
+  vertical-align: middle;
+  border-radius: 3px;
 }
 
 .debug-overlay {
@@ -790,6 +921,9 @@ body {
 
 /* 罫線ではなく余白と背景で切る。ギフト付きだけが色を持つ */
 .comment-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   padding: 7px 10px;
   font-size: 13px;
   line-height: 1.55;
@@ -799,6 +933,29 @@ body {
   box-shadow: 0 0 0 0 rgba(var(--color-accent-rgb), 0);
   transition: box-shadow 1.2s ease;
   animation: comment-item-enter 0.28s ease-out;
+}
+
+/* 投稿者情報を持たないコメントに、色付きの頭文字アイコンで「人らしさ」を持たせる */
+.comment-avatar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  border-radius: 50%;
+  background: var(--avatar-color, var(--color-accent));
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  user-select: none;
+}
+
+.comment-body {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* ギフト付きコメントは淡いパステル地になるため、
@@ -888,6 +1045,22 @@ body {
   align-items: center;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.gift-points-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  margin-right: auto;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-subtle);
+  border-radius: 999px;
+  white-space: nowrap;
 }
 
 .selected-item-preview {
@@ -1114,6 +1287,12 @@ body {
     0 8px 20px -6px rgba(var(--item-color-rgb, var(--color-accent-rgb)), 0.6);
 }
 
+/* ポイント不足のアイテム。選択はできるが見た目で不足が分かるようにする */
+.item-choice.is-unaffordable {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .item-choice-icon {
   width: 34px;
   height: 34px;
@@ -1134,6 +1313,13 @@ body {
   line-height: 1.35;
   word-break: break-word;
   text-overflow: ellipsis;
+}
+
+.item-choice-cost {
+  font-size: 10px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
 }
 
 .item-status {
@@ -1246,6 +1432,13 @@ body {
   margin: 0;
   font-size: 12px;
   color: var(--color-live);
+}
+
+/* 中型デスクトップ以下では動画とコメント欄の幅を優先し、おすすめ配信は隠す */
+@media (max-width: 1200px) {
+  .recommended-area {
+    display: none;
+  }
 }
 
 /* タブレット以下: 動画を上、コメント欄を下に積む */

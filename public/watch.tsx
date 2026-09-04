@@ -9,9 +9,9 @@ import {
   pickDefaultChannel,
   resolvePlaylistUrl,
   LEGACY_DEFAULT_PLAYLIST_URL,
-  type Channel,
 } from "./channels-data";
 import { CATALOG_DEFAULT_CHANNEL_ID, findChannelCatalogEntry, loopRemainingSeconds } from "./channel-catalog";
+import { fetchStreams, type Stream } from "./streams-data";
 
 // シークバー上で「ライブ扱い」とみなす配信端からの許容秒数
 const LIVE_EDGE_THRESHOLD_SECONDS = 9;
@@ -23,6 +23,11 @@ const COMMENT_SERVER_URL = "https://intern-comment-server.intern-comment-server.
 const COMMENT_HIGHLIGHT_DURATION_MS = 1500;
 const COMMENT_MAX_LENGTH = 200;
 const NG_WORDS = ["死ね", "殺す", "きえろ", "バカ", "アホ"];
+
+// コメント遡り閲覧用の自前サーバー(server/history-server)。intern-comment-serverの/eventsは
+// 接続前の投稿を保持しないため、受信したメッセージをこちらにも転送して直近分を保存させる。
+// デプロイ後は実際のURL(例: https://xxxx.deno.dev)に差し替えること。未到達でも黙って無視される。
+const HISTORY_SERVER_URL = "http://localhost:8000";
 
 const ITEMS_URL = `${COMMENT_SERVER_URL}/items`;
 const ITEM_ICON_FALLBACK =
@@ -67,7 +72,15 @@ const LIKE_BUTTON_ANIMATION_MS = 350;
 const LIKE_PARTICLE_LIFETIME_MS = 900;
 const LIKE_PARTICLES = ["❤️", "💗", "💕"];
 
-// バックエンドと未接続のため、配信者情報・視聴者数はモックデータで表示する
+// ギフトの持ち点。コメントサーバーはitemのcostを持つがクライアント側の管理に委ねているため、
+// ここでlocalStorageベースの残高として実装する
+const GIFT_POINTS_STORAGE_KEY = "giftPoints";
+const GIFT_POINTS_INITIAL_BALANCE = 500;
+
+// バックエンドと未接続のため、視聴者数はモックデータで表示する。
+// タイトル・配信者名は streams-data.ts の配信一覧(ホーム画面と同じデータ)を
+// channelId で突き合わせて表示することで、ホーム画面と視聴画面の表示を一致させる。
+// 該当する配信が見つからない(データ未取得/未知のchannelId)場合はこの値を代わりに使う。
 const MOCK_STREAMER = {
   title: "雑談しながらのんびりゲーム実況",
   name: "はると",
@@ -76,15 +89,31 @@ const MOCK_STREAMER = {
   tags: ["雑談", "ゲーム"],
 };
 
+type StreamerInfo = typeof MOCK_STREAMER;
+
+// Streamはlabel/tagsを持たないため、カテゴリから同等の表示情報を組み立てる
+function streamerInfoFromStream(stream: Stream): StreamerInfo {
+  return {
+    title: stream.title,
+    name: stream.streamerName,
+    label: `${stream.category}チャンネル`,
+    iconColor: stream.thumbnailColor,
+    tags: [stream.category],
+  };
+}
+
 interface Item {
   id: string;
   name: string;
   iconUrl: string;
+  cost: number;
   animationUrl?: string;
 }
 
 interface CommentEntry {
   key: number;
+  /** サーバーが払い出すID。履歴サーバーとライブSSEの重複排除に使う */
+  id?: string;
   text?: string;
   item?: Item;
   isNew: boolean;
@@ -178,6 +207,25 @@ function hexToRgb(hex: string): [number, number, number] {
 // "#rrggbb"形式の16進カラーコードを "r, g, b" 形式のCSS用文字列に変換する
 function hexToRgbString(hex: string): string {
   return hexToRgb(hex).join(", ");
+}
+
+// コメントに投稿者情報が無いため、コメントのkeyから色と頭文字を一意に導出し、
+// 疑似的な「投稿者アイコン」として表示する(黄金角を使い隣り合うkeyでも色相が離れるようにする)
+function avatarColorForComment(comment: CommentEntry): string {
+  const hue = (comment.key * 137.508) % 360;
+  return hslToHex(hue, 65, 55);
+}
+
+function avatarLabelForComment(comment: CommentEntry): string {
+  const source = comment.text?.trim() || comment.item?.name;
+  return source ? source.charAt(0).toUpperCase() : "?";
+}
+
+// おすすめ配信サムネのグラデーション用。ratio=0で元の色、1で黒に近づく
+function darkenHex(hex: string, ratio: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  const mix = (channel: number) => Math.round(channel * (1 - ratio));
+  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
 }
 
 // 秒数を "mm:ss"(1時間以上は "h:mm:ss")形式の文字列に整形する
@@ -344,10 +392,12 @@ function VideoPlayer({
   playlistUrl,
   giftAnimations,
   loopDurationSeconds,
+  comments,
 }: {
   playlistUrl: string | null;
   giftAnimations: GiftAnimationEntry[];
   loopDurationSeconds: number | null;
+  comments: CommentEntry[];
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const videoFrameRef = useRef<HTMLDivElement>(null);
@@ -356,11 +406,13 @@ function VideoPlayer({
   const isSeekingRef = useRef(false);
   const pendingSeekRef = useRef<{ target: number; retriesLeft: number; timeoutId: number } | null>(null);
   const rafIdRef = useRef<number | null>(null);
+  const fullscreenCommentListRef = useRef<HTMLUListElement>(null);
 
   const [isPaused, setIsPaused] = useState(true);
   const [isMuted, setIsMuted] = useState(true);
   const [seekState, setSeekState] = useState<SeekState>(INITIAL_SEEK_STATE);
   const [debugText, setDebugText] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // updateSeekBarはrAFループ(tick)が初回の関数インスタンスを掴み続けるため、
   // 依存を増やして作り直すと古いクロージャが回り続ける。尺はrefで読む。
@@ -546,6 +598,22 @@ function VideoPlayer({
       videoFrameRef.current?.requestFullscreen();
     }
   }
+
+  // 全画面化中は.video-frameの外(サイドバーのコメント欄)が描画されなくなるため、
+  // 全画面状態を検知して右下にコメントの簡易オーバーレイを出す
+  useEffect(() => {
+    function onFullscreenChange() {
+      setIsFullscreen(document.fullscreenElement === videoFrameRef.current);
+    }
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
+  // 全画面オーバーレイも新着コメントが増えたら最下部までスクロールする
+  useEffect(() => {
+    const el = fullscreenCommentListRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [comments]);
   // LIVEボタン押下で配信のライブ端まで一気にシークして再生を再開する
   function handleLiveClick() {
     const video = videoRef.current;
@@ -595,6 +663,29 @@ function VideoPlayer({
         ))}
       </div>
       {isDebugEnabled && <pre className="debug-overlay">{debugText}</pre>}
+      {isFullscreen && comments.length > 0 && (
+        <div className="fullscreen-comment-overlay" aria-live="polite">
+          <ul className="fullscreen-comment-list" ref={fullscreenCommentListRef}>
+            {comments.map((comment) => (
+              <li key={comment.key} className="fullscreen-comment-item">
+                {comment.item && (
+                  <img
+                    className="fullscreen-comment-item-icon"
+                    src={comment.item.iconUrl}
+                    alt={comment.item.name}
+                    onError={(event) => {
+                      event.currentTarget.onerror = null;
+                      event.currentTarget.src = ITEM_ICON_FALLBACK;
+                    }}
+                  />
+                )}
+                {comment.item?.name}
+                {comment.text ? (comment.item ? " " : "") + comment.text : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="video-controls">
         <div
           className="seek-bar"
@@ -658,9 +749,9 @@ function VideoPlayer({
   );
 }
 
-function StreamMeta() {
-  const avatarUrl = initialAvatarDataUrl(MOCK_STREAMER.name, MOCK_STREAMER.iconColor);
-  const followStorageKey = `follow:${MOCK_STREAMER.name}`;
+function StreamMeta({ streamer }: { streamer: StreamerInfo }) {
+  const avatarUrl = initialAvatarDataUrl(streamer.name, streamer.iconColor);
+  const followStorageKey = `follow:${streamer.name}`;
 
   const [isFollowing, setIsFollowing] = useState(() => localStorage.getItem(followStorageKey) === "true");
   const [viewerCount, setViewerCount] = useState(VIEWER_COUNT_INITIAL);
@@ -716,13 +807,13 @@ function StreamMeta() {
   return (
     <div className="stream-meta">
       <div className="streamer-icon">
-        <img className="streamer-icon-img" src={avatarUrl} alt={MOCK_STREAMER.name} />
+        <img className="streamer-icon-img" src={avatarUrl} alt={streamer.name} />
       </div>
       <div className="stream-title-box">
-        <span className="streamer-name">{MOCK_STREAMER.name}</span>
-        <span className="streamer-label">{MOCK_STREAMER.label}</span>
+        <span className="streamer-name">{streamer.name}</span>
+        <span className="streamer-label">{streamer.label}</span>
         <div className="stream-tag-row">
-          {MOCK_STREAMER.tags.map((tag) => (
+          {streamer.tags.map((tag) => (
             <span key={tag} className="stream-tag-badge">
               {tag}
             </span>
@@ -839,21 +930,20 @@ function GiftBubble({
   );
 }
 
-function CommentsPanel({ onGiftItem }: { onGiftItem: (item: Item) => void }) {
-  const [comments, setComments] = useState<CommentEntry[]>([]);
+function CommentsPanel({
+  onGiftItem,
+  comments,
+  appendComment,
+}: {
+  onGiftItem: (item: Item) => void;
+  comments: CommentEntry[];
+  appendComment: (comment: CommentEntry) => void;
+}) {
   const listRef = useRef<HTMLUListElement>(null);
   // 飛行演出の起点。選択中のギフトチップがあればそれを、無ければギフトボタンを使う
   const giftPreviewRef = useRef<HTMLDivElement>(null);
   const giftButtonRef = useRef<HTMLButtonElement>(null);
   const [giftBubbles, setGiftBubbles] = useState<GiftBubbleEntry[]>([]);
-
-  // コメントを一覧の末尾に追加し、一定時間だけ新着ハイライトを点ける
-  const appendComment = useCallback((comment: CommentEntry) => {
-    setComments((prev) => [...prev, comment]);
-    window.setTimeout(() => {
-      setComments((prev) => prev.map((c) => (c.key === comment.key ? { ...c, isNew: false } : c)));
-    }, COMMENT_HIGHLIGHT_DURATION_MS);
-  }, []);
 
   // ギフト受信時、アイコンをコメント一覧の下端へ飛ばす。座標は都度getBoundingClientRectで
   // 実測するのでリサイズやレイアウト変更にも追従する。起点や一覧が測れないとき、
@@ -908,16 +998,30 @@ function CommentsPanel({ onGiftItem }: { onGiftItem: (item: Item) => void }) {
     const events = new EventSource(`${COMMENT_SERVER_URL}/events`);
     events.onmessage = (event) => {
       try {
-        const payload = JSON.parse(event.data) as { text?: string; item?: Item };
-        const { text, item } = payload ?? {};
+        const payload = JSON.parse(event.data) as {
+          id?: string;
+          text?: string;
+          item?: Item;
+          timestamp?: string;
+        };
+        const { id, text, item, timestamp } = payload ?? {};
         if (!item && !text) return;
 
         const comment: CommentEntry = {
           key: generateKey(),
+          id,
           text: text ? maskNgWords(text) : undefined,
           item,
           isNew: true,
         };
+        // 遡り閲覧のため、受信したメッセージを履歴サーバーにも転送しておく(失敗しても無視)
+        if (id) {
+          fetch(`${HISTORY_SERVER_URL}/log`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id, text: text ?? null, item: item ?? null, timestamp }),
+          }).catch(() => {});
+        }
         if (item) {
           onGiftItem(item);
           // ギフトは飛行演出が着地してからコメント一覧に追加する
@@ -945,6 +1049,20 @@ function CommentsPanel({ onGiftItem }: { onGiftItem: (item: Item) => void }) {
   const [itemsError, setItemsError] = useState<string | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const selectedItem = items?.find((item) => item.id === selectedItemId) ?? null;
+
+  // ギフトの持ち点。端末内でのみ保持し、送信成功のたびに消費する
+  const [points, setPoints] = useState(() => {
+    const stored = localStorage.getItem(GIFT_POINTS_STORAGE_KEY);
+    return stored !== null ? Number(stored) : GIFT_POINTS_INITIAL_BALANCE;
+  });
+  function spendPoints(amount: number) {
+    setPoints((prev) => {
+      const next = prev - amount;
+      localStorage.setItem(GIFT_POINTS_STORAGE_KEY, String(next));
+      return next;
+    });
+  }
+  const insufficientPoints = selectedItem !== null && selectedItem.cost > points;
 
   // アイテム一覧をサーバーから取得する(初回パネル表示時・再取得ボタン押下時に呼ばれる)
   const fetchItems = useCallback(async () => {
@@ -997,8 +1115,12 @@ function CommentsPanel({ onGiftItem }: { onGiftItem: (item: Item) => void }) {
   const length = commentText.length;
   const isEmpty = commentText.trim().length === 0;
   const isOverLimit = length > COMMENT_MAX_LENGTH;
-  const canSend = (!isEmpty || selectedItemId !== null) && !isOverLimit && !isSending;
-  const displayedError = isOverLimit ? `文字数が上限(${COMMENT_MAX_LENGTH}文字)を超えています。` : sendError;
+  const canSend = (!isEmpty || selectedItemId !== null) && !isOverLimit && !isSending && !insufficientPoints;
+  const displayedError = isOverLimit
+    ? `文字数が上限(${COMMENT_MAX_LENGTH}文字)を超えています。`
+    : insufficientPoints && selectedItem
+      ? `ポイントが足りません(必要 ${selectedItem.cost}pt / 所持 ${points}pt)`
+      : sendError;
 
   function handleCommentInput(event: ChangeEvent<HTMLTextAreaElement>) {
     const value = event.target.value;
@@ -1010,7 +1132,7 @@ function CommentsPanel({ onGiftItem }: { onGiftItem: (item: Item) => void }) {
   async function sendComment() {
     const text = commentText.trim();
     const itemId = selectedItemId;
-    if ((!text && !itemId) || isOverLimit || isSending) return;
+    if ((!text && !itemId) || isOverLimit || isSending || insufficientPoints) return;
 
     const payload: { text?: string; itemId?: string } = {};
     if (text) payload.text = text;
@@ -1027,6 +1149,10 @@ function CommentsPanel({ onGiftItem }: { onGiftItem: (item: Item) => void }) {
       });
       if (!response.ok) {
         throw new Error(`送信に失敗しました (status: ${response.status})`);
+      }
+      if (itemId) {
+        const cost = items?.find((item) => item.id === itemId)?.cost ?? 0;
+        spendPoints(cost);
       }
       setCommentText("");
       setSelectedItemId(null);
@@ -1074,18 +1200,27 @@ function CommentsPanel({ onGiftItem }: { onGiftItem: (item: Item) => void }) {
                   : undefined
               }
             >
-              {comment.item && (
-                <>
-                  <img className="comment-item-icon" src={comment.item.iconUrl} alt={comment.item.name} />
-                  {comment.item.name}
-                </>
-              )}
-              {comment.text && (
-                <>
-                  {comment.item ? " " : null}
-                  {comment.text}
-                </>
-              )}
+              <span
+                className="comment-avatar"
+                style={{ "--avatar-color": avatarColorForComment(comment) } as CSSProperties}
+                aria-hidden="true"
+              >
+                {avatarLabelForComment(comment)}
+              </span>
+              <div className="comment-body">
+                {comment.item && (
+                  <>
+                    <img className="comment-item-icon" src={comment.item.iconUrl} alt={comment.item.name} />
+                    {comment.item.name}
+                  </>
+                )}
+                {comment.text && (
+                  <>
+                    {comment.item ? " " : null}
+                    {comment.text}
+                  </>
+                )}
+              </div>
             </li>
           ))}
         </ul>
@@ -1094,6 +1229,9 @@ function CommentsPanel({ onGiftItem }: { onGiftItem: (item: Item) => void }) {
           <div className="item-panel-inner">
             <div className="item-panel-header">
               <span className="item-panel-title">ギフトを選ぶ</span>
+              <span className="gift-points-badge" title="ギフトに使えるポイント">
+                <span aria-hidden="true">🪙</span> {points.toLocaleString()}pt
+              </span>
               <button type="button" className="item-panel-close" aria-label="閉じる" onClick={closePanel}>
                 ✕
               </button>
@@ -1112,12 +1250,15 @@ function CommentsPanel({ onGiftItem }: { onGiftItem: (item: Item) => void }) {
                 <div className="item-choice-list">
                   {items.map((item) => {
                     const isSelected = item.id === selectedItemId;
+                    const isUnaffordable = item.cost > points;
                     const themeColor = getItemThemeColor(item.id);
                     return (
                       <button
                         key={item.id}
                         type="button"
-                        className={`item-choice${isSelected ? " is-selected" : ""}`}
+                        className={`item-choice${isSelected ? " is-selected" : ""}${
+                          isUnaffordable ? " is-unaffordable" : ""
+                        }`}
                         aria-pressed={isSelected}
                         style={
                           {
@@ -1137,6 +1278,7 @@ function CommentsPanel({ onGiftItem }: { onGiftItem: (item: Item) => void }) {
                           }}
                         />
                         <span className="item-choice-name">{item.name}</span>
+                        <span className="item-choice-cost">{item.cost}pt</span>
                       </button>
                     );
                   })}
@@ -1148,6 +1290,9 @@ function CommentsPanel({ onGiftItem }: { onGiftItem: (item: Item) => void }) {
       </section>
       <section className="send-area">
         <div className="gift-row">
+          <span className="gift-points-badge" title="ギフトに使えるポイント">
+            <span aria-hidden="true">🪙</span> {points.toLocaleString()}pt
+          </span>
           {selectedItem && (
             <div
               ref={giftPreviewRef}
@@ -1204,39 +1349,110 @@ function CommentsPanel({ onGiftItem }: { onGiftItem: (item: Item) => void }) {
   );
 }
 
-// チャンネル切替タブ。チャンネル一覧が未取得/取得失敗のときは何も表示しない
-function ChannelTabs({
-  channels,
-  activeChannelId,
-  onSelect,
-}: {
-  channels: Channel[] | null;
-  activeChannelId: string | null;
-  onSelect: (channel: Channel) => void;
-}) {
-  if (!channels || channels.length === 0) return null;
+// おすすめ配信の1件分。サムネはホーム画面のカードと同じ配色ロジックを縮小して流用する
+function RecommendedThumbnail({ stream }: { stream: Stream }) {
+  const gradient = `linear-gradient(155deg, ${stream.thumbnailColor} 0%, ${darkenHex(
+    stream.thumbnailColor,
+    0.42
+  )} 100%)`;
   return (
-    <div className="channel-tabs" role="tablist" aria-label="チャンネル切替">
-      {channels.map((channel) => (
-        <button
-          key={channel.id}
-          type="button"
-          role="tab"
-          className={`channel-tab${channel.id === activeChannelId ? " is-active" : ""}`}
-          aria-pressed={channel.id === activeChannelId}
-          onClick={() => onSelect(channel)}
-        >
-          {channel.title}
-        </button>
-      ))}
+    <div className="recommended-item-thumbnail" style={{ background: gradient }}>
+      <span className="recommended-item-initial" aria-hidden="true">
+        {stream.streamerName.slice(0, 1)}
+      </span>
+      <span className="recommended-item-live-badge">LIVE</span>
+      <span className="recommended-item-viewer-badge">{stream.viewerCount.toLocaleString()}人</span>
     </div>
+  );
+}
+
+// 視聴画面左側のおすすめ配信パネル。今見ているチャンネルは一覧から除く
+function RecommendedSidebar({
+  streams,
+  activeChannelId,
+}: {
+  streams: Stream[];
+  activeChannelId: string | null;
+}) {
+  const visibleStreams = streams.filter((stream) => stream.channelId !== activeChannelId);
+  if (visibleStreams.length === 0) return null;
+
+  return (
+    <aside className="recommended-area" aria-label="おすすめの配信">
+      <h2 className="recommended-area-title">おすすめの配信</h2>
+      <ul className="recommended-list">
+        {visibleStreams.map((stream) => (
+          <li key={stream.id}>
+            <a
+              className="recommended-item"
+              href={`/watch.html?channelId=${encodeURIComponent(stream.channelId)}`}
+            >
+              <RecommendedThumbnail stream={stream} />
+              <div className="recommended-item-body">
+                <p className="recommended-item-title">{stream.title}</p>
+                <p className="recommended-item-meta">
+                  <span className="recommended-item-streamer">{stream.streamerName}</span>
+                  <span className="recommended-item-category">{stream.category}</span>
+                </p>
+              </div>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </aside>
   );
 }
 
 function Watch() {
   const [giftAnimations, setGiftAnimations] = useState<GiftAnimationEntry[]>([]);
-  const [channels, setChannels] = useState<Channel[] | null>(null);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+  const [recommendedStreams, setRecommendedStreams] = useState<Stream[]>([]);
+  // コメント一覧はサイドバーと全画面オーバーレイの双方から参照するため、
+  // CommentsPanelではなくここで一元管理する
+  const [comments, setComments] = useState<CommentEntry[]>([]);
+  // 履歴サーバーからの遡り取得と、ライブSSE受信の両方がここを通るため、
+  // 同じidのメッセージが二重に表示されないようにここで一元的に弾く
+  const seenIdsRef = useRef<Set<string>>(new Set());
+  const appendComment = useCallback((comment: CommentEntry) => {
+    if (comment.id) {
+      if (seenIdsRef.current.has(comment.id)) return;
+      seenIdsRef.current.add(comment.id);
+    }
+    setComments((prev) => [...prev, comment]);
+    window.setTimeout(() => {
+      setComments((prev) => prev.map((c) => (c.key === comment.key ? { ...c, isNew: false } : c)));
+    }, COMMENT_HIGHLIGHT_DURATION_MS);
+  }, []);
+
+  // 視聴開始時、履歴サーバーから直近のコメントを取得して先頭にまとめて差し込む。
+  // 履歴サーバー未デプロイ/未起動でも黙って無視し、通常の視聴に支障は出さない
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${HISTORY_SERVER_URL}/history`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { messages?: { id: string; text: string | null; item: Item | null }[] } | null) => {
+        if (cancelled || !data?.messages) return;
+        const seed: CommentEntry[] = [];
+        for (const message of data.messages) {
+          if (seenIdsRef.current.has(message.id)) continue;
+          seenIdsRef.current.add(message.id);
+          seed.push({
+            key: generateKey(),
+            id: message.id,
+            text: message.text ? maskNgWords(message.text) : undefined,
+            item: message.item ?? undefined,
+            isNew: false,
+          });
+        }
+        if (seed.length > 0) setComments((prev) => [...seed, ...prev]);
+      })
+      .catch(() => {
+        // 履歴サーバーが未起動/未デプロイのときは何もしない
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   // channelId指定時はチャンネル一覧取得を待ち、未指定時は待たずに固定エンドポイントで即再生する
   const [playlistUrl, setPlaylistUrl] = useState<string | null>(
     requestedChannelId ? null : LEGACY_DEFAULT_PLAYLIST_URL
@@ -1247,7 +1463,6 @@ function Watch() {
     fetchChannels()
       .then((list) => {
         if (cancelled) return;
-        setChannels(list);
         if (requestedChannelId) {
           const matched = list.find((channel) => channel.id === requestedChannelId) ?? pickDefaultChannel(list);
           if (matched) {
@@ -1269,19 +1484,26 @@ function Watch() {
     };
   }, []);
 
-  function handleSelectChannel(channel: Channel) {
-    if (channel.id === activeChannelId) return;
-    setActiveChannelId(channel.id);
-    setPlaylistUrl(resolvePlaylistUrl(channel));
-    const url = new URL(location.href);
-    url.searchParams.set("channelId", channel.id);
-    history.replaceState(null, "", url);
-  }
+  useEffect(() => {
+    let cancelled = false;
+    fetchStreams().then((list) => {
+      if (!cancelled) setRecommendedStreams(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // ループ表示は /channels.json の取得結果に依存させない。取得できていればそのidを、
   // まだ/取れなくてもURL指定のid、それも無ければ既定チャンネルとみなして尺を引く。
   // カタログに無いidのときはundefinedになり、ループ表示自体が出ない。
-  const loopChannel = findChannelCatalogEntry(activeChannelId ?? requestedChannelId ?? CATALOG_DEFAULT_CHANNEL_ID);
+  const resolvedChannelId = activeChannelId ?? requestedChannelId ?? CATALOG_DEFAULT_CHANNEL_ID;
+  const loopChannel = findChannelCatalogEntry(resolvedChannelId);
+
+  // ホーム画面の配信一覧(streams-data.ts)からchannelIdが一致する配信を探し、
+  // タイトル・配信者名をホーム画面と一致させる。取得前/未知のchannelIdの間はMOCK_STREAMERを表示する。
+  const activeStream = recommendedStreams.find((stream) => stream.channelId === resolvedChannelId) ?? null;
+  const streamerInfo = activeStream ? streamerInfoFromStream(activeStream) : MOCK_STREAMER;
 
   // アイテムがanimationUrlを持つ場合、動画エリア上にポップアップ表示してからフェードアウトする
   const triggerGiftAnimation = useCallback((item: Item) => {
@@ -1301,23 +1523,24 @@ function Watch() {
 
   return (
     <div className="layout">
+      <RecommendedSidebar streams={recommendedStreams} activeChannelId={activeChannelId} />
       <section
         className="video-area"
-        style={{ "--stage-light-rgb": hexToRgbString(MOCK_STREAMER.iconColor) } as CSSProperties}
+        style={{ "--stage-light-rgb": hexToRgbString(streamerInfo.iconColor) } as CSSProperties}
       >
         <div className="stage">
-          <ChannelTabs channels={channels} activeChannelId={activeChannelId} onSelect={handleSelectChannel} />
           <VideoPlayer
             playlistUrl={playlistUrl}
             giftAnimations={giftAnimations}
             loopDurationSeconds={loopChannel?.durationSeconds ?? null}
+            comments={comments}
           />
-          <h1 className="watch-title">{MOCK_STREAMER.title}</h1>
-          <StreamMeta />
+          <h1 className="watch-title">{streamerInfo.title}</h1>
+          <StreamMeta streamer={streamerInfo} />
         </div>
       </section>
       <aside className="side-area">
-        <CommentsPanel onGiftItem={triggerGiftAnimation} />
+        <CommentsPanel onGiftItem={triggerGiftAnimation} comments={comments} appendComment={appendComment} />
       </aside>
     </div>
   );
