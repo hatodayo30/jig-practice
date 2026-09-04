@@ -8,7 +8,7 @@ export interface Channel {
   default: boolean;
 }
 
-const HLS_SERVER_BASE = "https://intern-hls-server.tdmi0e341.workers.dev";
+const HLS_SERVER_BASE = "https://intern-hls-server.tomaton.workers.dev";
 
 // 後方互換用の固定エンドポイント。デフォルトチャンネルと同一内容が返る想定。
 export const LEGACY_DEFAULT_PLAYLIST_URL = `${HLS_SERVER_BASE}/stream.m3u8`;
