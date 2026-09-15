@@ -13,7 +13,7 @@ const ALL_CATEGORIES = "すべて";
 
 // 配信色はサムネのグラデーションと、その下に漏れる「照明」の両方に使うため、
 // 16進カラーをRGB成分に分解しておく。
-function hexToRgb(hex: string): [number, number, number] {
+export function hexToRgb(hex: string): [number, number, number] {
   const value = hex.replace("#", "");
   const full =
     value.length === 3
@@ -27,13 +27,13 @@ function hexToRgb(hex: string): [number, number, number] {
 }
 
 // グラデーションの暗い側を作る(ratio=0で元の色、1で黒)
-function darken(hex: string, ratio: number): string {
+export function darken(hex: string, ratio: number): string {
   const [r, g, b] = hexToRgb(hex);
   const mix = (channel: number) => Math.round(channel * (1 - ratio));
   return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
 }
 
-function StreamCard({
+export function StreamCard({
   stream,
   index,
   tabIndex,
@@ -80,7 +80,7 @@ function StreamCard({
   );
 }
 
-function StreamGrid({
+export function StreamGrid({
   streams,
   state,
   errorMessage,
@@ -285,7 +285,7 @@ function useMarqueeDrag({ trackRef, distance, isPaused }: {
 // 「おすすめ配信」を常にゆっくり流れ続けるティッカーとして表示するセクション。
 // タブが非アクティブな間は流れを止め、ドラッグ/スワイプしている間は自動送りより
 // ポインターの動きを優先する。離せばその場から自動送りを再開する。
-function RecommendedMarquee({
+export function RecommendedMarquee({
   streams,
   state,
   errorMessage,
@@ -347,7 +347,7 @@ function RecommendedMarquee({
 
 // チャンネルの視聴数(紐づく配信のviewerCount)ランキング。ジャンル別表示は「配信一覧」の
 // ジャンルタブと役割が重複するため持たせず、ランキングだけの軽量なリストにする。
-function ChannelRankingSection({ streams }: { streams: Stream[] }) {
+export function ChannelRankingSection({ streams }: { streams: Stream[] }) {
   const channels = listChannelCatalog();
   if (channels.length === 0) return null;
 
@@ -383,6 +383,8 @@ function ChannelRankingSection({ streams }: { streams: Stream[] }) {
 const ROULETTE_REPEAT = 8;
 const ROULETTE_DURATION_MS = 4200;
 const ROULETTE_EASING = "cubic-bezier(0.09, 0.68, 0.15, 1)";
+// transitionendが届かなかったとき(transitioncancel等)に演出を打ち切るまでの猶予
+const ROULETTE_SETTLE_FALLBACK_MS = 400;
 const CONFETTI_COUNT = 28;
 const CONFETTI_DURATION_MS = 1600;
 
@@ -398,12 +400,19 @@ const ROULETTE_DEPTH_BLUR_PX = 3;
 const ROULETTE_DEPTH_CULL_MARGIN_PX = 300;
 
 // リール中央からの距離に応じて、各カードの見た目(奥行き)を連続的に変化させる。
-// 回転中・静止後を問わず毎フレーム呼び出される、当選判定やアニメーションとは独立した処理。
+// 当選判定やアニメーションとは独立した、見た目専用の処理。
+//
+// カード100枚超を1フレームで扱うため、計測(getBoundingClientRect)を先にまとめてから
+// 書き込みに移る。書き込んでいるtransform/opacity/filterはレイアウトを無効化しないので
+// 交互に行っても強制同期レイアウトにはならないが、読み書きが混ざらない形にしておけば
+// 将来レイアウトに影響するプロパティを足したときに事故らない。
 function applyRouletteDepth(frame: HTMLDivElement, cards: (HTMLDivElement | null)[]) {
   const frameRect = frame.getBoundingClientRect();
   if (frameRect.width === 0) return;
   const centerX = frameRect.left + frameRect.width / 2;
 
+  // --- 計測フェーズ: レイアウトの読み取りだけを行う ---
+  const measured: { card: HTMLDivElement; cardCenterX: number }[] = [];
   for (const card of cards) {
     if (!card) continue;
     const cardRect = card.getBoundingClientRect();
@@ -413,8 +422,11 @@ function applyRouletteDepth(frame: HTMLDivElement, cards: (HTMLDivElement | null
     ) {
       continue;
     }
+    measured.push({ card, cardCenterX: cardRect.left + cardRect.width / 2 });
+  }
 
-    const cardCenterX = cardRect.left + cardRect.width / 2;
+  // --- 書き込みフェーズ: 以降レイアウトを読まない ---
+  for (const { card, cardCenterX } of measured) {
     const distanceRatio = (cardCenterX - centerX) / frameRect.width;
     const absDistanceRatio = Math.min(Math.abs(distanceRatio), 1);
 
@@ -476,6 +488,8 @@ function useRouletteReel(streams: Stream[]) {
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
   const spinningRef = useRef(false);
   const spinTokenRef = useRef(0);
+  // 走行中の演出の後始末。回転中にアンマウントされたときに呼ぶ。
+  const cleanupSpinRef = useRef<(() => void) | null>(null);
 
   const [isSpinning, setIsSpinning] = useState(false);
   const [result, setResult] = useState<Stream | null>(null);
@@ -534,13 +548,15 @@ function useRouletteReel(streams: Stream[]) {
       track.style.filter = "blur(0px)";
     });
 
-    const handleTransitionEnd = (event: TransitionEvent) => {
-      // transitionendはバブリングするため、カードのホバー演出(.stream-card-thumbnailの
-      // transform遷移)が偶然重なって発火したイベントを拾わないよう、対象がtrack自身で
-      // かつ"transform"の完了であることを確認してから処理する(trackは"filter"も同時に
-      // 遷移させているため、プロパティ名を見ずに解除すると本命のtransform完了を取りこぼす)。
-      if (event.target !== track || event.propertyName !== "transform") return;
+    // 演出の後始末。アンマウント時にも呼べるよう、状態更新とは分けておく。
+    const cleanupSpin = () => {
       track.removeEventListener("transitionend", handleTransitionEnd);
+      window.clearTimeout(fallbackId);
+      if (cleanupSpinRef.current === cleanupSpin) cleanupSpinRef.current = null;
+    };
+
+    const settle = () => {
+      cleanupSpin();
       if (spinTokenRef.current !== token) return;
       const landed = streams[targetIndex % streams.length];
       setResult(landed);
@@ -550,8 +566,26 @@ function useRouletteReel(streams: Stream[]) {
       setConfettiKey((key) => key + 1);
       setShowConfetti(true);
     };
+
+    const handleTransitionEnd = (event: TransitionEvent) => {
+      // transitionendはバブリングするため、カードのホバー演出(.stream-card-thumbnailの
+      // transform遷移)が偶然重なって発火したイベントを拾わないよう、対象がtrack自身で
+      // かつ"transform"の完了であることを確認してから処理する(trackは"filter"も同時に
+      // 遷移させているため、プロパティ名を見ずに解除すると本命のtransform完了を取りこぼす)。
+      if (event.target !== track || event.propertyName !== "transform") return;
+      settle();
+    };
+
+    // transitionendはtransitioncancel(遷移が別の指定で打ち切られた場合)では発火しない。
+    // 取りこぼすとspinningRefがtrueのまま固着し、以後サイコロボタンが二度と押せなくなるため、
+    // 尺を過ぎても届かなければこちらで確定させる。
+    const fallbackId = window.setTimeout(settle, ROULETTE_DURATION_MS + ROULETTE_SETTLE_FALLBACK_MS);
     track.addEventListener("transitionend", handleTransitionEnd);
+    cleanupSpinRef.current = cleanupSpin;
   };
+
+  // 回転中にアンマウントされてもリスナと保険タイマーを残さない
+  useEffect(() => () => cleanupSpinRef.current?.(), []);
 
   useEffect(() => {
     if (!showConfetti) return;
@@ -559,30 +593,39 @@ function useRouletteReel(streams: Stream[]) {
     return () => window.clearTimeout(timer);
   }, [showConfetti]);
 
-  // 立体的な奥行き演出専用のループ。回転中・静止後どちらでも常に有効にしておき、
-  // 当選判定やtranslateXのアニメーション処理には一切干渉しない。
+  // 立体的な奥行き演出専用のループ。当選判定やtranslateXのアニメーション処理には
+  // 一切干渉しない。
+  //
+  // カード位置が動くのは回転中(trackのtransform遷移中)だけなので、毎フレーム回すのも
+  // その間に限る。静止中は見た目が変わらないため一度反映すれば足り、放置しても負荷が残らない。
   useEffect(() => {
     if (reelItems.length === 0) return;
+    // reelItemsが減ったとき、前回の要素が配列の末尾に残らないようにする
+    cardRefs.current.length = reelItems.length;
+
+    const apply = () => {
+      const frame = frameRef.current;
+      if (frame) applyRouletteDepth(frame, cardRefs.current);
+    };
+
+    apply();
+    window.addEventListener("resize", apply);
 
     let rafId = 0;
-    const tick = () => {
-      const frame = frameRef.current;
-      if (frame) applyRouletteDepth(frame, cardRefs.current);
+    if (isSpinning) {
+      const tick = () => {
+        // ウィンドウが隠れている間は見た目を更新しても意味が無い
+        if (document.visibilityState === "visible") apply();
+        rafId = requestAnimationFrame(tick);
+      };
       rafId = requestAnimationFrame(tick);
-    };
-    rafId = requestAnimationFrame(tick);
-
-    const handleResize = () => {
-      const frame = frameRef.current;
-      if (frame) applyRouletteDepth(frame, cardRefs.current);
-    };
-    window.addEventListener("resize", handleResize);
+    }
 
     return () => {
-      cancelAnimationFrame(rafId);
-      window.removeEventListener("resize", handleResize);
+      if (rafId) cancelAnimationFrame(rafId);
+      window.removeEventListener("resize", apply);
     };
-  }, [reelItems.length]);
+  }, [reelItems.length, isSpinning]);
 
   return {
     frameRef,
@@ -600,7 +643,7 @@ function useRouletteReel(streams: Stream[]) {
 
 // 「サイコロを振る」→ カードが横に流れて減速し、中央のポインターでピタッと止まる演出。
 // 止まった配信がその場の「今日の1本」になる。
-function TodaysPickSection({ streams }: { streams: Stream[] }) {
+export function TodaysPickSection({ streams }: { streams: Stream[] }) {
   const {
     frameRef,
     trackRef,
@@ -677,7 +720,7 @@ function TodaysPickSection({ streams }: { streams: Stream[] }) {
   );
 }
 
-function useStreamList(fetcher: () => Promise<Stream[]>) {
+export function useStreamList(fetcher: () => Promise<Stream[]>) {
   const [state, setState] = useState<LoadState>("loading");
   const [streams, setStreams] = useState<Stream[]>([]);
 
@@ -702,7 +745,7 @@ function useStreamList(fetcher: () => Promise<Stream[]>) {
   return { state, streams };
 }
 
-function App() {
+export function App() {
   const recommended = useStreamList(fetchRecommendedStreams);
   const all = useStreamList(fetchStreams);
   const [category, setCategory] = useState(ALL_CATEGORIES);

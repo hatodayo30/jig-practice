@@ -1,7 +1,7 @@
 // ライブ配信画面のエントリスクリプト。
 // HLS再生、シークバー同期、コメント送受信、ギフト(アイテム)選択の各機能を初期化する。
 import { StrictMode, useCallback, useEffect, useRef, useState } from "react";
-import type { ChangeEvent, CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import type { ChangeEvent, CSSProperties, PointerEvent as ReactPointerEvent, RefObject } from "react";
 import { createRoot } from "react-dom/client";
 import Hls from "hls.js";
 import {
@@ -20,14 +20,27 @@ const isDebugEnabled = new URLSearchParams(location.search).has("debug");
 const requestedChannelId = new URLSearchParams(location.search).get("channelId");
 
 const COMMENT_SERVER_URL = "https://intern-comment-server.intern-comment-server.deno.net";
-const COMMENT_HIGHLIGHT_DURATION_MS = 1500;
 const COMMENT_MAX_LENGTH = 200;
+// 長時間視聴でコメント配列が際限なく伸びないよう、表示する上限を設ける。
+// 溢れた分は古い方から捨てる(サイドバーも全画面オーバーレイも最新側しか見ない)。
+const COMMENT_MAX_ENTRIES = 300;
+// 重複排除用に覚えておくid数。表示上限より十分多く取り、
+// 一覧から溢れたコメントが再受信で復活しないようにする。
+const SEEN_COMMENT_ID_LIMIT = 1000;
 const NG_WORDS = ["死ね", "殺す", "きえろ", "バカ", "アホ"];
 
 // コメント遡り閲覧用の自前サーバー(server/history-server)。intern-comment-serverの/eventsは
 // 接続前の投稿を保持しないため、受信したメッセージをこちらにも転送して直近分を保存させる。
-// デプロイ後は実際のURL(例: https://xxxx.deno.dev)に差し替えること。未到達でも黙って無視される。
-const HISTORY_SERVER_URL = "http://localhost:8000";
+// デプロイ先のURL(例: https://xxxx.deno.dev)は VITE_HISTORY_SERVER_URL で差し替える。
+// httpのまま https のページから叩くと mixed content で毎回失敗するので必ず設定すること。
+// 未到達でも黙って無視される。
+const HISTORY_SERVER_URL = import.meta.env.VITE_HISTORY_SERVER_URL ?? "http://localhost:8000";
+
+// 受信メッセージの履歴サーバーへの転送設定。全視聴者が同じメッセージをそれぞれ転送するため、
+// 1件ずつ即POSTすると「視聴者数 × メッセージ数」回の書き込みになる。まとめて送って回数を減らす。
+const HISTORY_LOG_FLUSH_MS = 1000;
+// サーバー側の /log/bulk が1リクエストで受け付ける上限に合わせる
+const HISTORY_LOG_MAX_BATCH = 100;
 
 const ITEMS_URL = `${COMMENT_SERVER_URL}/items`;
 const ITEM_ICON_FALLBACK =
@@ -62,6 +75,10 @@ const SEEK_REVERT_GUARD_MS = 1500;
 const SEEK_REVERT_TOLERANCE_SECONDS = 3;
 const SEEK_REVERT_MAX_RETRIES = 3;
 
+// ?debug のオーバーレイはrAFループに相乗りしているが、人が読む情報なので
+// 毎フレーム作り直す必要はない。この間隔まで間引く。
+const DEBUG_TEXT_INTERVAL_MS = 250;
+
 const VIEWER_COUNT_INITIAL = 1240;
 const VIEWER_COUNT_MIN = 100;
 const VIEWER_COUNT_MAX_DELTA = 15;
@@ -92,7 +109,7 @@ const MOCK_STREAMER = {
 type StreamerInfo = typeof MOCK_STREAMER;
 
 // Streamはlabel/tagsを持たないため、カテゴリから同等の表示情報を組み立てる
-function streamerInfoFromStream(stream: Stream): StreamerInfo {
+export function streamerInfoFromStream(stream: Stream): StreamerInfo {
   return {
     title: stream.title,
     name: stream.streamerName,
@@ -151,13 +168,59 @@ function generateKey(): number {
   return nextKey;
 }
 
+interface HistoryLogEntry {
+  id: string;
+  text: string | null;
+  item: Item | null;
+  timestamp?: string;
+}
+
+// 履歴サーバーへの転送キュー。SSEの受信ごとにPOSTせず、一定間隔でまとめて送る。
+const pendingHistoryLogs: HistoryLogEntry[] = [];
+let historyLogFlushId = 0;
+
+function flushHistoryLogs() {
+  historyLogFlushId = 0;
+  if (pendingHistoryLogs.length === 0) return;
+  const messages = pendingHistoryLogs.splice(0, HISTORY_LOG_MAX_BATCH);
+  fetch(`${HISTORY_SERVER_URL}/log/bulk`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages }),
+    // ページ離脱中でも送信を打ち切られないようにする
+    keepalive: true,
+  }).catch(() => {
+    // 履歴サーバーが未起動/未デプロイのときは何もしない
+  });
+  // 上限を超えて残っていれば続けて送る
+  if (pendingHistoryLogs.length > 0) scheduleHistoryLogFlush();
+}
+
+function scheduleHistoryLogFlush() {
+  if (historyLogFlushId !== 0) return;
+  historyLogFlushId = window.setTimeout(flushHistoryLogs, HISTORY_LOG_FLUSH_MS);
+}
+
+// 遡り閲覧のため、受信したメッセージを履歴サーバーにも転送しておく(失敗しても無視)
+function queueHistoryLog(entry: HistoryLogEntry) {
+  pendingHistoryLogs.push(entry);
+  scheduleHistoryLogFlush();
+}
+
+// 離脱時はまとめ送りを待たずに残りを吐き出す
+window.addEventListener("pagehide", () => {
+  if (historyLogFlushId !== 0) window.clearTimeout(historyLogFlushId);
+  historyLogFlushId = 0;
+  flushHistoryLogs();
+});
+
 // OSの「視差効果を減らす」設定。演出は省いても情報(コメント)は必ず表示する
 function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 // NGワードフィルタ。送受信データ自体は変更せず、表示直前にマスクする
-function maskNgWords(text: string): string {
+export function maskNgWords(text: string): string {
   return NG_WORDS.reduce((masked, word) => (word ? masked.split(word).join("***") : masked), text);
 }
 
@@ -229,7 +292,7 @@ function darkenHex(hex: string, ratio: number): string {
 }
 
 // 秒数を "mm:ss"(1時間以上は "h:mm:ss")形式の文字列に整形する
-function formatElapsed(seconds: number): string {
+export function formatElapsed(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "--:--";
   const total = Math.floor(seconds);
   const h = Math.floor(total / 3600);
@@ -257,7 +320,7 @@ function initialAvatarDataUrl(name: string, color: string): string {
 // 使い回すため、破棄された位置は原理的に正しく再取得できない)。
 // そのため実際に今デコード済みの video.buffered から、currentTime を含む
 // (見つからなければ最後の)区間を実効的なシーク可能範囲として使う。
-function getSeekableRange(video: HTMLVideoElement): SeekRange | null {
+export function getSeekableRange(video: HTMLVideoElement): SeekRange | null {
   const buffered = video.buffered;
   if (buffered.length === 0) return null;
 
@@ -276,7 +339,7 @@ function getSeekableRange(video: HTMLVideoElement): SeekRange | null {
 
 // 配信のライブ端(最新位置)を返す。hls.jsの情報が使えればそちらを優先し、
 // なければseekable範囲の終端を代わりに使う
-function getLiveEdge(hls: Hls | null, range: SeekRange): number {
+export function getLiveEdge(hls: Hls | null, range: SeekRange): number {
   if (hls && Number.isFinite(hls.liveSyncPosition)) return hls.liveSyncPosition as number;
   return range.end;
 }
@@ -331,64 +394,74 @@ function UnmutedIcon() {
   );
 }
 
+// シークバーのうち「秒単位でしか変わらない」値だけをReactのstateで持つ。
+// つまみの位置とループ残り時間は毎フレーム変わるため、stateには入れずrefで
+// DOMへ直接書き込む(そうしないと再生中ずっと60回/秒で再レンダリングが走る)。
 interface SeekState {
-  bufferedPct: number;
-  thumbPct: number;
+  /** 実効シーク範囲が取れているか。バッファ表示の有無に対応する。 */
+  hasRange: boolean;
   isLive: boolean;
   elapsed: string;
-  /** 次のループ先頭までの残り秒数。尺が分からないときはnull。 */
-  loopRemaining: number | null;
 }
 
+// 参照が変わらないよう定数として持つ。同じ参照をsetStateに渡せばReactは再レンダリングしない。
 const INITIAL_SEEK_STATE: SeekState = {
-  bufferedPct: 0,
-  thumbPct: 0,
+  hasRange: false,
   isLive: false,
   elapsed: "--:--",
-  loopRemaining: null,
 };
+
+// ループ内の進み具合を示す細い円の周長。2πr(r=6) ≒ 37.7。
+const LOOP_RING_CIRCUMFERENCE = 2 * Math.PI * 6;
 
 // 「次のループ開始まで残りmm:ss」表示。チャンネルの尺が分からないときは何も出さない。
 // 尺は固定なので、同じチャンネルを見ている視聴者にはこの残り時間も同じ値が出る
 // ——それが同時視聴の同期性の可視化になる。
-function LoopCountdown({
-  remainingSeconds,
+//
+// 残り時間は毎フレーム変わるため、値の反映はVideoPlayerのrAFループがrefを通じて
+// 直接DOMへ書き込む。このコンポーネント自身は器を描くだけで再レンダリングされない。
+export function LoopCountdown({
   durationSeconds,
+  rootRef,
+  ringRef,
+  timeRef,
 }: {
-  remainingSeconds: number | null;
   durationSeconds: number | null;
+  rootRef: RefObject<HTMLSpanElement | null>;
+  ringRef: RefObject<SVGCircleElement | null>;
+  timeRef: RefObject<HTMLSpanElement | null>;
 }) {
-  if (remainingSeconds === null || !durationSeconds) return null;
-
-  // 残り時間なので切り上げる(0.4秒残り → 00:01)。00:00 を挟まず次の周期の頭に戻る。
-  const label = formatElapsed(Math.ceil(remainingSeconds));
-  // ループ内の進み具合を細い円で示す。周長は 2πr(r=6) ≒ 37.7。
-  const circumference = 2 * Math.PI * 6;
-  const progressed = 1 - remainingSeconds / durationSeconds;
+  if (!durationSeconds) return null;
 
   return (
     <span
       className="loop-countdown"
+      ref={rootRef}
+      // 再生位置が取れるまでは値が無いので隠しておく(rAFループが表示に切り替える)
+      hidden
       title={`このチャンネルは${formatElapsed(durationSeconds)}でループしています。同じチャンネルを見ている人には同じ瞬間の映像が流れます。`}
     >
       <svg className="loop-countdown-ring" viewBox="0 0 16 16" aria-hidden="true">
         <circle className="loop-countdown-ring-track" cx="8" cy="8" r="6" />
         <circle
           className="loop-countdown-ring-value"
+          ref={ringRef}
           cx="8"
           cy="8"
           r="6"
-          strokeDasharray={circumference}
-          strokeDashoffset={circumference * (1 - progressed)}
+          strokeDasharray={LOOP_RING_CIRCUMFERENCE}
+          strokeDashoffset={LOOP_RING_CIRCUMFERENCE}
         />
       </svg>
       <span className="loop-countdown-label">次のループまで</span>
-      <span className="loop-countdown-time">{label}</span>
+      <span className="loop-countdown-time" ref={timeRef}>
+        --:--
+      </span>
     </span>
   );
 }
 
-function VideoPlayer({
+export function VideoPlayer({
   playlistUrl,
   giftAnimations,
   loopDurationSeconds,
@@ -407,6 +480,12 @@ function VideoPlayer({
   const pendingSeekRef = useRef<{ target: number; retriesLeft: number; timeoutId: number } | null>(null);
   const rafIdRef = useRef<number | null>(null);
   const fullscreenCommentListRef = useRef<HTMLUListElement>(null);
+  // 毎フレーム変わる表示(つまみ位置・ループ残り)はstateを経由せずここへ直接書く
+  const seekThumbRef = useRef<HTMLDivElement | null>(null);
+  const loopCountdownRef = useRef<HTMLSpanElement | null>(null);
+  const loopRingRef = useRef<SVGCircleElement | null>(null);
+  const loopTimeRef = useRef<HTMLSpanElement | null>(null);
+  const lastDebugAtRef = useRef(0);
 
   const [isPaused, setIsPaused] = useState(true);
   const [isMuted, setIsMuted] = useState(true);
@@ -414,18 +493,52 @@ function VideoPlayer({
   const [debugText, setDebugText] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // updateSeekBarはrAFループ(tick)が初回の関数インスタンスを掴み続けるため、
-  // 依存を増やして作り直すと古いクロージャが回り続ける。尺はrefで読む。
+  // 尺はレンダリングをまたいでrAFループから読むためrefにも写す
   const loopDurationRef = useRef(loopDurationSeconds);
   loopDurationRef.current = loopDurationSeconds;
+
+  // 毎フレーム更新する値の反映。Reactのstateを経由すると再生中ずっと60回/秒で
+  // VideoPlayer全体(全画面時はコメント一覧も)が再描画されるため、DOMへ直接書く。
+  const writeSeekDom = useCallback((thumbPct: number, loopRemaining: number | null) => {
+    // 親にCSS変数を置くと配下すべてのスタイル再計算を誘発するので、つまみ自身に直接書く
+    const thumb = seekThumbRef.current;
+    if (thumb) thumb.style.left = `${thumbPct}%`;
+
+    const root = loopCountdownRef.current;
+    if (!root) return;
+    const duration = loopDurationRef.current;
+    if (loopRemaining === null || !duration) {
+      root.hidden = true;
+      return;
+    }
+    root.hidden = false;
+    // ループ内の進み具合。残り時間の割合をそのまま円の欠けとして使う
+    if (loopRingRef.current) {
+      loopRingRef.current.style.strokeDashoffset = String(LOOP_RING_CIRCUMFERENCE * (loopRemaining / duration));
+    }
+    // 残り時間なので切り上げる(0.4秒残り → 00:01)。00:00 を挟まず次の周期の頭に戻る。
+    const label = formatElapsed(Math.ceil(loopRemaining));
+    const time = loopTimeRef.current;
+    if (time && time.textContent !== label) time.textContent = label;
+  }, []);
+
+  // ?debug時のみ。人が読むオーバーレイなので毎フレーム作り直さず間引く。
+  const updateDebugText = useCallback((video: HTMLVideoElement, range: SeekRange | null) => {
+    const now = performance.now();
+    if (now - lastDebugAtRef.current < DEBUG_TEXT_INTERVAL_MS) return;
+    lastDebugAtRef.current = now;
+    setDebugText(renderDebugText(video, hlsRef.current, range));
+  }, []);
 
   const updateSeekBar = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
     const range = getSeekableRange(video);
     if (!range || range.end <= range.start) {
+      writeSeekDom(0, null);
+      // 同じ参照を渡すのでReactは再レンダリングをスキップする
       setSeekState(INITIAL_SEEK_STATE);
-      if (isDebugEnabled) setDebugText(renderDebugText(video, hlsRef.current, null));
+      if (isDebugEnabled) updateDebugText(video, null);
       return;
     }
 
@@ -437,21 +550,25 @@ function VideoPlayer({
       ? formatElapsed(video.currentTime)
       : `${formatElapsed(video.currentTime)} / ${formatElapsed(video.duration)}`;
 
-    setSeekState({
-      bufferedPct: 100,
-      thumbPct: (position / span) * 100,
-      isLive,
-      elapsed,
-      // rAFループに相乗りしているので、setIntervalを足さずに1秒未満の精度で更新される
-      loopRemaining: loopRemainingSeconds(loopDurationRef.current, video.currentTime),
-    });
-    if (isDebugEnabled) setDebugText(renderDebugText(video, hlsRef.current, range));
-  }, []);
+    // rAFループに相乗りしているので、setIntervalを足さずに1秒未満の精度で更新される
+    writeSeekDom((position / span) * 100, loopRemainingSeconds(loopDurationRef.current, video.currentTime));
 
-  function clearPendingSeek() {
+    // 秒単位でしか変わらない値だけstateへ。変化が無ければ前の参照を返して再レンダリングを止める。
+    setSeekState((prev) =>
+      prev.hasRange && prev.isLive === isLive && prev.elapsed === elapsed
+        ? prev
+        : { hasRange: true, isLive, elapsed }
+    );
+    if (isDebugEnabled) updateDebugText(video, range);
+  }, [writeSeekDom, updateDebugText]);
+
+  const clearPendingSeek = useCallback(() => {
     if (pendingSeekRef.current) clearTimeout(pendingSeekRef.current.timeoutId);
     pendingSeekRef.current = null;
-  }
+  }, []);
+
+  // アンマウント時に最後のシーク巻き戻しガードが残らないようにする
+  useEffect(() => clearPendingSeek, [clearPendingSeek]);
 
   function armSeekRevertGuard(target: number, retriesLeft: number) {
     clearPendingSeek();
@@ -518,21 +635,35 @@ function VideoPlayer({
     event.currentTarget.releasePointerCapture(event.pointerId);
   }
 
-  // timeupdate はブラウザによっては数百ms〜1秒間隔でしか発火しないため、
-  // 再生中は rAF でも補間更新し、シークバーの見た目の追従を滑らかにする。
-  function tick() {
-    if (!isSeekingRef.current) updateSeekBar();
-    rafIdRef.current = requestAnimationFrame(tick);
-  }
-  function startRaf() {
-    if (rafIdRef.current !== null) return;
-    rafIdRef.current = requestAnimationFrame(tick);
-  }
-  function stopRaf() {
+  const stopRaf = useCallback(() => {
     if (rafIdRef.current === null) return;
     cancelAnimationFrame(rafIdRef.current);
     rafIdRef.current = null;
-  }
+  }, []);
+
+  // timeupdate はブラウザによっては数百ms〜1秒間隔でしか発火しないため、
+  // 再生中は rAF でも補間更新し、シークバーの見た目の追従を滑らかにする。
+  // tickはループ開始時に一度だけ作る。毎レンダリングで作り直すと、走行中のrAF連鎖が
+  // 古いクロージャを掴んだままになる。
+  const startRaf = useCallback(() => {
+    if (rafIdRef.current !== null) return;
+    const tick = () => {
+      if (!isSeekingRef.current) updateSeekBar();
+      rafIdRef.current = requestAnimationFrame(tick);
+    };
+    rafIdRef.current = requestAnimationFrame(tick);
+  }, [updateSeekBar]);
+
+  // 非表示タブでは見た目の更新に意味が無いのでループごと止める。
+  // videoは再生され続けるため、復帰時はtimeupdateを待たずここで再開する。
+  useEffect(() => {
+    function onVisibilityChange() {
+      if (document.visibilityState === "hidden") stopRaf();
+      else if (videoRef.current && !videoRef.current.paused) startRaf();
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [startRaf, stopRaf]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -573,11 +704,13 @@ function VideoPlayer({
       isCancelled = true;
       hls?.destroy();
       hlsRef.current = null;
+      // destroy済みのインスタンスをグローバル経由で保持し続けないよう、
+      // チャンネル切替のたびにデバッグ用の参照も外す
+      if (isDebugEnabled) (window as unknown as Record<string, unknown>).__hls = null;
       video.removeEventListener("loadedmetadata", startPlayback);
       stopRaf();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playlistUrl]);
+  }, [playlistUrl, clearPendingSeek, startRaf, stopRaf, updateSeekBar]);
 
   function handlePlayToggle() {
     const video = videoRef.current;
@@ -634,7 +767,7 @@ function VideoPlayer({
         playsInline
         onPlay={() => {
           setIsPaused(false);
-          startRaf();
+          if (document.visibilityState === "visible") startRaf();
         }}
         onPause={() => {
           setIsPaused(true);
@@ -699,8 +832,9 @@ function VideoPlayer({
           onPointerCancel={endSeek}
         >
           <div className="seek-bar-track">
-            <div className="seek-bar-buffered" style={{ width: `${seekState.bufferedPct}%` }} />
-            <div className="seek-bar-thumb" style={{ left: `${seekState.thumbPct}%` }} />
+            {/* つまみの位置は毎フレーム変わるため、rAFループがleftを直接書き換える */}
+            <div className={`seek-bar-buffered${seekState.hasRange ? " is-active" : ""}`} />
+            <div className="seek-bar-thumb" ref={seekThumbRef} />
           </div>
         </div>
         <div className="video-controls-row">
@@ -730,7 +864,12 @@ function VideoPlayer({
             LIVE
           </button>
           <span className="elapsed-time">{seekState.elapsed}</span>
-          <LoopCountdown remainingSeconds={seekState.loopRemaining} durationSeconds={loopDurationSeconds} />
+          <LoopCountdown
+            durationSeconds={loopDurationSeconds}
+            rootRef={loopCountdownRef}
+            ringRef={loopRingRef}
+            timeRef={loopTimeRef}
+          />
           <div className="video-controls-spacer" />
           <button type="button" className="video-control-btn" aria-label="全画面表示" onClick={handleFullscreenToggle}>
             <svg className="video-control-icon" viewBox="0 0 24 24" fill="none">
@@ -749,7 +888,7 @@ function VideoPlayer({
   );
 }
 
-function StreamMeta({ streamer }: { streamer: StreamerInfo }) {
+export function StreamMeta({ streamer }: { streamer: StreamerInfo }) {
   const avatarUrl = initialAvatarDataUrl(streamer.name, streamer.iconColor);
   const followStorageKey = `follow:${streamer.name}`;
 
@@ -930,7 +1069,7 @@ function GiftBubble({
   );
 }
 
-function CommentsPanel({
+export function CommentsPanel({
   onGiftItem,
   comments,
   appendComment,
@@ -1014,13 +1153,8 @@ function CommentsPanel({
           item,
           isNew: true,
         };
-        // 遡り閲覧のため、受信したメッセージを履歴サーバーにも転送しておく(失敗しても無視)
         if (id) {
-          fetch(`${HISTORY_SERVER_URL}/log`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id, text: text ?? null, item: item ?? null, timestamp }),
-          }).catch(() => {});
+          queueHistoryLog({ id, text: text ?? null, item: item ?? null, timestamp });
         }
         if (item) {
           onGiftItem(item);
@@ -1367,7 +1501,7 @@ function RecommendedThumbnail({ stream }: { stream: Stream }) {
 }
 
 // 視聴画面左側のおすすめ配信パネル。今見ているチャンネルは一覧から除く
-function RecommendedSidebar({
+export function RecommendedSidebar({
   streams,
   activeChannelId,
 }: {
@@ -1403,7 +1537,7 @@ function RecommendedSidebar({
   );
 }
 
-function Watch() {
+export function Watch() {
   const [giftAnimations, setGiftAnimations] = useState<GiftAnimationEntry[]>([]);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [recommendedStreams, setRecommendedStreams] = useState<Stream[]>([]);
@@ -1413,29 +1547,49 @@ function Watch() {
   // 履歴サーバーからの遡り取得と、ライブSSE受信の両方がここを通るため、
   // 同じidのメッセージが二重に表示されないようにここで一元的に弾く
   const seenIdsRef = useRef<Set<string>>(new Set());
-  const appendComment = useCallback((comment: CommentEntry) => {
-    if (comment.id) {
-      if (seenIdsRef.current.has(comment.id)) return;
-      seenIdsRef.current.add(comment.id);
+
+  // 既出idの記録。Setは挿入順を保つので、溢れた分は古い方から捨てられる。
+  const rememberCommentId = useCallback((id: string) => {
+    const seen = seenIdsRef.current;
+    seen.add(id);
+    if (seen.size <= SEEN_COMMENT_ID_LIMIT) return;
+    let excess = seen.size - SEEN_COMMENT_ID_LIMIT;
+    for (const oldest of seen) {
+      seen.delete(oldest);
+      if (--excess <= 0) break;
     }
-    setComments((prev) => [...prev, comment]);
-    window.setTimeout(() => {
-      setComments((prev) => prev.map((c) => (c.key === comment.key ? { ...c, isNew: false } : c)));
-    }, COMMENT_HIGHLIGHT_DURATION_MS);
   }, []);
+
+  const appendComment = useCallback(
+    (comment: CommentEntry) => {
+      if (comment.id) {
+        if (seenIdsRef.current.has(comment.id)) return;
+        rememberCommentId(comment.id);
+      }
+      // 新着の縁取り(.is-new)はCSSアニメーションで自然に消える。以前はタイマーで
+      // isNewをfalseに戻していたが、1件のためにコメント配列全体を作り直すことになり、
+      // 件数に比例して1コメントあたりのコストが増えていた。
+      setComments((prev) => {
+        const next = [...prev, comment];
+        return next.length > COMMENT_MAX_ENTRIES ? next.slice(next.length - COMMENT_MAX_ENTRIES) : next;
+      });
+    },
+    [rememberCommentId]
+  );
 
   // 視聴開始時、履歴サーバーから直近のコメントを取得して先頭にまとめて差し込む。
   // 履歴サーバー未デプロイ/未起動でも黙って無視し、通常の視聴に支障は出さない
   useEffect(() => {
-    let cancelled = false;
-    fetch(`${HISTORY_SERVER_URL}/history`)
+    // アンマウント後にレスポンスの受信とパースを続けないよう、接続ごと打ち切る
+    const controller = new AbortController();
+    fetch(`${HISTORY_SERVER_URL}/history`, { signal: controller.signal })
       .then((response) => (response.ok ? response.json() : null))
       .then((data: { messages?: { id: string; text: string | null; item: Item | null }[] } | null) => {
-        if (cancelled || !data?.messages) return;
+        if (!data?.messages) return;
         const seed: CommentEntry[] = [];
         for (const message of data.messages) {
           if (seenIdsRef.current.has(message.id)) continue;
-          seenIdsRef.current.add(message.id);
+          rememberCommentId(message.id);
           seed.push({
             key: generateKey(),
             id: message.id,
@@ -1447,12 +1601,10 @@ function Watch() {
         if (seed.length > 0) setComments((prev) => [...seed, ...prev]);
       })
       .catch(() => {
-        // 履歴サーバーが未起動/未デプロイのときは何もしない
+        // 履歴サーバーが未起動/未デプロイのとき、および中断時は何もしない
       });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    return () => controller.abort();
+  }, [rememberCommentId]);
   // channelId指定時はチャンネル一覧取得を待ち、未指定時は待たずに固定エンドポイントで即再生する
   const [playlistUrl, setPlaylistUrl] = useState<string | null>(
     requestedChannelId ? null : LEGACY_DEFAULT_PLAYLIST_URL
