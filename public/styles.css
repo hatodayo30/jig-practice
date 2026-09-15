@@ -1,26 +1,26 @@
-/* ===== ともる: 共通トークンとシェル、視聴画面 =====
-   デザインコンセプト「ステージ照明」。
-   画面の地は客席、配信ひとつひとつが照明の当たった舞台という見立て。
-   彩度の高い色は配信そのものが持つ色(--light / --stage-light)からしか出さず、
-   UIのハウスカラーは舞台照明のジェルを思わせる紫に固定する。 */
+/* ===== MADO -窓-: 共通トークンとシェル、視聴画面 =====
+   デザインコンセプト「窓」。
+   画面の地は紙、配信ひとつひとつは覗き込む窓という見立て。
+   ハウスカラーはインクのような単色の青に絞り、彩度の高い色は
+   配信そのものが持つ色(--light / --stage-light)とLIVE表示の赤だけに残す。 */
 
 :root {
   /* 面と線 */
-  --color-bg: #dde7f8;
-  --color-bg-elevated: #f0f5ff;
-  --color-bg-subtle: #d1def6;
-  --color-border: #c1d1ed;
+  --color-bg: #f6f5f1;
+  --color-bg-elevated: #ffffff;
+  --color-bg-subtle: #eae8e1;
+  --color-border: #dad6cc;
 
   /* 文字 */
-  --color-text: #0f1828;
-  --color-text-secondary: #4a5775;
-  --color-text-tertiary: #76849f;
+  --color-text: #16140f;
+  --color-text-secondary: #57544a;
+  --color-text-tertiary: #8a8577;
 
-  /* ハウスカラー(操作可能なものだけに使う) */
-  --color-accent: #5b34d6;
-  --color-accent-rgb: 91, 52, 214;
-  --color-accent-alt: #7a5bea;
-  --color-accent-soft: #ede7ff;
+  /* ハウスカラー(操作可能なものだけに使う単色アクセント) */
+  --color-accent: #2453d1;
+  --color-accent-rgb: 36, 83, 209;
+  --color-accent-alt: #4a72e0;
+  --color-accent-soft: #e6ecfb;
 
   /* 点灯を表す唯一の赤。LIVE表示以外には使わない */
   --color-live: #e8334a;
@@ -43,19 +43,19 @@
 }
 
 :root[data-theme="dark"] {
-  --color-bg: #060d1f;
-  --color-bg-elevated: #0f1930;
-  --color-bg-subtle: #172541;
-  --color-border: #243657;
+  --color-bg: #0a0a09;
+  --color-bg-elevated: #16150f;
+  --color-bg-subtle: #1e1c17;
+  --color-border: #322f27;
 
-  --color-text: #e8effd;
-  --color-text-secondary: #99abcc;
-  --color-text-tertiary: #6a7c9f;
+  --color-text: #f2f1ec;
+  --color-text-secondary: #b3afa4;
+  --color-text-tertiary: #79766b;
 
-  --color-accent: #a88cff;
-  --color-accent-rgb: 168, 140, 255;
-  --color-accent-alt: #c4b1ff;
-  --color-accent-soft: #241d3d;
+  --color-accent: #6f93ff;
+  --color-accent-rgb: 111, 147, 255;
+  --color-accent-alt: #8fabff;
+  --color-accent-soft: #1c2440;
 
   --color-live: #ff5068;
   --color-live-rgb: 255, 80, 104;
@@ -124,27 +124,17 @@ body {
   color: var(--color-accent);
 }
 
-/* 点灯しているランプ。サービス名の「ともる」をそのまま図にしたもの */
-.wordmark-lamp {
-  width: 9px;
-  height: 9px;
+/* 窓枠。サービス名「窓」をそのまま図にしたもの */
+.wordmark-icon {
+  width: 15px;
+  height: 15px;
   flex: 0 0 auto;
-  border-radius: 50%;
-  background: var(--color-live);
-  box-shadow: 0 0 0 3px rgba(var(--color-live-rgb), 0.16), 0 0 12px rgba(var(--color-live-rgb), 0.8);
-  animation: lamp-pulse 2.6s ease-in-out infinite;
+  color: var(--color-text-tertiary);
+  transition: color 0.15s ease;
 }
 
-@keyframes lamp-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 3px rgba(var(--color-live-rgb), 0.16),
-      0 0 12px rgba(var(--color-live-rgb), 0.8);
-  }
-  50% {
-    box-shadow: 0 0 0 5px rgba(var(--color-live-rgb), 0.08),
-      0 0 18px rgba(var(--color-live-rgb), 0.45);
-  }
+.wordmark:hover .wordmark-icon {
+  color: var(--color-accent);
 }
 
 .wordmark-text {
@@ -422,6 +412,13 @@ body {
   background: rgba(255, 255, 255, 0.85);
 }
 
+/* 実効シーク範囲が取れているあいだだけトラック全体を埋める */
+.seek-bar-buffered.is-active {
+  width: 100%;
+}
+
+/* 位置はJS側(rAFループ)がleftを毎フレーム直接書き換えて反映する。
+   Reactのstateを経由すると再生中ずっと再レンダリングが走ってしまうため。 */
 .seek-bar-thumb {
   position: absolute;
   top: 50%;
@@ -496,6 +493,12 @@ body {
   background: rgba(255, 255, 255, 0.08);
   border-radius: 999px;
   cursor: default;
+}
+
+/* display:flex がUA標準の[hidden]を上書きしてしまうため明示的に打ち消す。
+   再生位置が取れるまではJS側がhiddenを立てて非表示にしている。 */
+.loop-countdown[hidden] {
+  display: none;
 }
 
 .loop-countdown-ring {
@@ -964,8 +967,20 @@ body {
   color: #16151c;
 }
 
+/* 新着コメントの縁取り。以前はJS側のタイマーでisNewをfalseに戻していたが、
+   1件解除するたびにコメント配列全体を作り直すことになるためCSSに寄せた。
+   入場アニメーションを打ち消さないよう、両方を並べて指定する。 */
+@keyframes comment-item-highlight {
+  from {
+    box-shadow: 0 0 0 2px var(--color-accent);
+  }
+  to {
+    box-shadow: 0 0 0 2px transparent;
+  }
+}
+
 .comment-item.is-new {
-  box-shadow: 0 0 0 2px var(--color-accent);
+  animation: comment-item-enter 0.28s ease-out, comment-item-highlight 1.5s ease-out forwards;
 }
 
 /* コメントが0件のときは空の誘い(.comment-empty)に高さを譲る */
